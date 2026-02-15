@@ -5,6 +5,10 @@ const workerPathOverrides = require("./worker");
 const adminPathOverrides = require("./admin");
 const paymentPathOverrides = require("./payment");
 const platformManagerPathOverrides = require("./platformManager");
+const projectPathOverrides = require("./project");
+const reviewPathOverrides = require("./review");
+const complaintPathOverrides = require("./complaint");
+const chatPathOverrides = require("./chat");
 
 module.exports = {
   ...authPathOverrides,
@@ -14,4 +18,8 @@ module.exports = {
   ...adminPathOverrides,
   ...paymentPathOverrides,
   ...platformManagerPathOverrides,
+  ...projectPathOverrides,
+  ...reviewPathOverrides,
+  ...complaintPathOverrides,
+  ...chatPathOverrides,
 };
