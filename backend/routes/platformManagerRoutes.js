@@ -13,7 +13,9 @@ const {
   changePlatformManagerPassword,
   processVerificationTask,
   getComplaintDetailsPM,
-  replyToComplaintPM
+  replyToComplaintPM,
+  getCompanyPaymentQueue,
+  collectCompanyPlatformFee,
 } = require('../controllers/platformManagerController');
 
 const authadmin = require('../middlewares/authadmin');
@@ -66,5 +68,9 @@ router.post('/platform-manager/verification/:taskId/process', authadmin, process
 // Reply to complaints
 router.get('/platform-manager/complaint/:complaintId', authadmin, getComplaintDetailsPM);
 router.post('/platform-manager/complaint/:complaintId/reply', authadmin, replyToComplaintPM);
+
+// Company phase payment queue
+router.get('/platform-manager/company-payments', authadmin, getCompanyPaymentQueue);
+router.post('/platform-manager/company-payments/:projectId/:milestonePercentage/collect', authadmin, collectCompanyPlatformFee);
 
 module.exports = router;

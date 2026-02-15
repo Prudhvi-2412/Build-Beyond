@@ -282,6 +282,7 @@
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -310,6 +311,59 @@
 
 .ls-form-options a:hover {
   text-decoration: underline;
+}
+
+.ls-auth-divider {
+  display: flex;
+  align-items: center;
+  margin: 1rem 0 0.85rem;
+  color: var(--text-light);
+  font-size: 0.85rem;
+}
+
+.ls-auth-divider::before,
+.ls-auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.ls-auth-divider span {
+  padding: 0 0.7rem;
+}
+
+.ls-google-btn-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.4rem;
+  min-height: 52px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 0.35rem;
+}
+
+.ls-google-btn {
+  min-height: 44px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.ls-google-loading {
+  text-align: center;
+  color: var(--text-light);
+  font-size: 0.85rem;
+  margin-top: 0.35rem;
+}
+
+.ls-google-error {
+  text-align: center;
+  color: #b91c1c;
+  font-size: 0.82rem;
+  margin-top: 0.35rem;
 }
 
 .ls-w-100 {
@@ -370,6 +424,31 @@
 .ls-otp-input:focus {
   border-color: var(--primary);
   outline: none;
+}
+
+.ls-otp-action-btn {
+  background: var(--primary);
+  color: #ffffff;
+  border: 1px solid var(--primary);
+  padding: 0.65rem 1rem;
+}
+
+.ls-otp-action-btn:hover {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+}
+
+.ls-signup-otp-box {
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.ls-success-text {
+  color: #16a34a;
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 a.ls-disabled {

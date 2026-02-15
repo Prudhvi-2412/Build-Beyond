@@ -3,6 +3,17 @@ const bcrypt = require('bcrypt');
 const { Company, Bid, ConstructionProjectSchema, Worker, WorkerToCompany, CompanytoWorker } = require('../models');
 const { getTargetDate } = require('../utils/helpers');
 const { findOrCreateChatRoom } = require('./chatController');
+const { invalidateCacheByPrefix } = require('../utils/redisCache');
+
+const ADMIN_REVENUE_INTELLIGENCE_CACHE_PREFIX = 'admin:platform-revenue-intelligence:v1';
+
+const invalidateAdminRevenueIntelligenceCache = async () => {
+  try {
+    await invalidateCacheByPrefix(ADMIN_REVENUE_INTELLIGENCE_CACHE_PREFIX);
+  } catch (error) {
+    console.error('Failed to invalidate admin revenue intelligence cache:', error.message);
+  }
+};
 
 function calculateProgress(startDate, timelineString) {
   try {
@@ -50,6 +61,117 @@ function calculateDaysRemaining(startDate, timelineString) {
   }
 }
 
+function buildCompanyPhasePaymentSummary(project) {
+  const phases = Array.isArray(project?.proposal?.phases) ? project.proposal.phases : [];
+  const milestones = Array.isArray(project?.milestones) ? project.milestones : [];
+  const payouts = Array.isArray(project?.paymentDetails?.payouts) ? project.paymentDetails.payouts : [];
+
+  return phases.map((phase, index) => {
+    const milestonePercentage = Number(phase.percentage || (index + 1) * 25);
+    const payout = payouts.find((entry) => Number(entry.milestonePercentage) === milestonePercentage) || null;
+    const milestone = milestones.find((entry) => Number(entry.percentage) === milestonePercentage && entry.isCheckpoint) || null;
+
+    const phaseAmount = Number(phase.amount || 0);
+    const initialReleased = Number(payout?.immediateReleaseAmount || 0);
+    const heldAmount = Number(payout?.heldAmount || 0);
+    const companyReceived = initialReleased + (payout?.status === 'released' ? heldAmount : 0);
+    const rawPlatformFeeStatus = payout?.platformFeeStatus || 'not_due';
+    const platformFeeAmount = Number(payout?.platformFee || 0);
+    const normalizedPlatformFeeStatus =
+      payout?.status === 'released' &&
+      platformFeeAmount > 0 &&
+      rawPlatformFeeStatus === 'not_due'
+        ? 'pending'
+        : rawPlatformFeeStatus;
+    const previousPayout = index > 0
+      ? payouts.find((entry) => Number(entry.milestonePercentage) === Number(phases[index - 1]?.percentage || index * 25))
+      : null;
+
+    return {
+      phaseName: phase.name || `Phase ${index + 1}`,
+      milestonePercentage,
+      phaseAmount,
+      customerPaid: Boolean(payout?.customerPaidAt),
+      companyReceived,
+      initialReleased,
+      heldAmount,
+      holdStatus: payout?.status || 'pending',
+      platformFee: platformFeeAmount,
+      platformFeeStatus: normalizedPlatformFeeStatus,
+      platformFeeInvoiceUrl: payout?.platformFeeInvoiceUrl || null,
+      platformFeeInvoiceUploadedAt: payout?.platformFeeInvoiceUploadedAt || null,
+      platformFeeCollectedAt: payout?.platformFeeCollectedAt || null,
+      isApprovedByCustomer: Boolean(milestone?.isApprovedByCustomer),
+      blockedByPreviousPlatformFee: Boolean(
+        previousPayout && previousPayout.status === 'released' && previousPayout.platformFeeStatus !== 'collected'
+      ),
+    };
+  });
+}
+
+const uploadPlatformFeeInvoice = async (req, res) => {
+  try {
+    const companyId = req.user.user_id;
+    const { projectId, milestonePercentage } = req.body;
+
+    if (!projectId || !milestonePercentage) {
+      return res.status(400).json({ success: false, error: 'projectId and milestonePercentage are required' });
+    }
+
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ success: false, error: 'Invoice file is required' });
+    }
+
+    const project = await ConstructionProjectSchema.findOne({ _id: projectId, companyId });
+    if (!project) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+
+    const payout = (project.paymentDetails?.payouts || []).find(
+      (entry) => Number(entry.milestonePercentage) === Number(milestonePercentage),
+    );
+
+    if (!payout) {
+      return res.status(404).json({ success: false, error: 'Phase payout not found' });
+    }
+
+    if (payout.status === 'released' && Number(payout.platformFee || 0) > 0 && payout.platformFeeStatus === 'not_due') {
+      payout.platformFeeStatus = 'pending';
+    }
+
+    if (payout.status !== 'released' || !['pending', 'collected'].includes(payout.platformFeeStatus || 'not_due')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invoice can be uploaded only after phase payout release and when platform fee is pending or collected',
+      });
+    }
+
+    payout.platformFeeInvoiceUrl = req.file.path;
+    payout.platformFeeInvoiceUploadedAt = new Date();
+    await project.save();
+
+    await invalidateAdminRevenueIntelligenceCache();
+
+    return res.json({
+      success: true,
+      message:
+        payout.platformFeeStatus === 'collected'
+          ? 'Platform fee invoice uploaded successfully.'
+          : 'Platform fee invoice uploaded. Awaiting platform manager verification.',
+      data: {
+        projectId,
+        milestonePercentage: Number(milestonePercentage),
+        platformFeeStatus: payout.platformFeeStatus,
+        invoiceUrl: payout.platformFeeInvoiceUrl,
+        uploadedAt: payout.platformFeeInvoiceUploadedAt,
+      },
+    });
+  } catch (error) {
+    console.error('Error uploading platform fee invoice:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 const getDashboard = async (req, res) => {
   try {
     const bids = await Bid.find({ status: 'open' }).sort({ createdAt: -1 }).limit(2).lean();
@@ -76,6 +198,7 @@ const getOngoingProjects = async (req, res) => {
     const metrics = { totalActiveProjects, monthlyRevenue: '4.8', customerSatisfaction: '4.7', projectsOnSchedule: '85' };
     const enhancedProjects = projects.map(project => {
       const projectObj = project.toObject();
+      const phasePaymentSummary = buildCompanyPhasePaymentSummary(projectObj);
       projectObj.completion = 0;
       projectObj.targetDate = getTargetDate(project.createdAt, project.projectTimeline);
       projectObj.currentPhase = 'Update current ';
@@ -83,6 +206,8 @@ const getOngoingProjects = async (req, res) => {
       projectObj.floors = projectObj.floors || [];
       projectObj.milestones = projectObj.milestones || [];
       projectObj.recentUpdates = projectObj.recentUpdates || [];
+      projectObj.phasePaymentSummary = phasePaymentSummary;
+      projectObj.blockedByPlatformFee = phasePaymentSummary.some((entry) => entry.blockedByPreviousPlatformFee);
       return projectObj;
     });
 
@@ -193,8 +318,7 @@ const getCompanyRevenue = async (req, res) => {
       phase1: { total: 0, received: 0, pending: 0, count: 0 },
       phase2: { total: 0, received: 0, pending: 0, count: 0 },
       phase3: { total: 0, received: 0, pending: 0, count: 0 },
-      phase4: { total: 0, received: 0, pending: 0, count: 0 },
-      final: { total: 0, received: 0, pending: 0, count: 0 }
+      phase4: { total: 0, received: 0, pending: 0, count: 0 }
     };
 
     // Process each project with detailed phase-wise breakdown
@@ -206,67 +330,28 @@ const getCompanyRevenue = async (req, res) => {
       totalReceived += received;
       totalPending += pending;
 
-      // Calculate phase-wise breakdown
-      const phases = p.proposal?.phases || [];
-      const milestones = p.milestones || [];
-      
-      let phaseBreakdown = phases.map(phase => {
-        const phaseAmount = phase.amount || (projectValue * ((phase.percentage || 0) / 100)) || 0;
-        const phasePercentage = phase.percentage || 0;
-        const phaseId = phase.isFinal ? 'final' : `phase${phases.indexOf(phase) + 1}`;
-        
-        // Find milestone for this phase (checkpoints at 25%, 50%, 75%, 100%)
-        let milestone = null;
-        if (phase.isFinal) {
-          milestone = milestones.find(m => m.percentage === 100);
-        } else {
-          const checkpointPercentage = phasePercentage;
-          milestone = milestones.find(m => m.percentage === checkpointPercentage);
-        }
-        
-        // Calculate payments for this phase
-        let upfrontPaid = 0;
-        let completionPaid = 0;
-        let finalPaid = 0;
+      const phaseBreakdown = buildCompanyPhasePaymentSummary(p).map((phase, index) => {
+        const phaseId = `phase${index + 1}`;
+        const pending = Math.max(phase.phaseAmount - phase.companyReceived, 0);
 
-        if (milestone && milestone.payments) {
-          if (!phase.isFinal) {
-            if (milestone.payments.upfront?.status === 'released' || milestone.payments.upfront?.status === 'paid') {
-              upfrontPaid = milestone.payments.upfront.amount || 0;
-            }
-            if (milestone.payments.completion?.status === 'released' || milestone.payments.completion?.status === 'paid') {
-              completionPaid = milestone.payments.completion.amount || 0;
-            }
-          } else {
-            const finalStatus = milestone.payments.final?.status || milestone.payments.completion?.status;
-            if (finalStatus === 'released' || finalStatus === 'paid') {
-              finalPaid = milestone.payments.final?.amount || milestone.payments.completion?.amount || 0;
-            }
-          }
-        }
+        phaseAnalytics[phaseId].total += phase.phaseAmount;
+        phaseAnalytics[phaseId].received += phase.companyReceived;
+        phaseAnalytics[phaseId].pending += pending;
+        phaseAnalytics[phaseId].count += 1;
 
-        const phasePaid = upfrontPaid + completionPaid + finalPaid;
-        const phasePending = phaseAmount - phasePaid;
-        
-        // Update phase analytics
-        if (phaseAnalytics[phaseId]) {
-          phaseAnalytics[phaseId].total += phaseAmount;
-          phaseAnalytics[phaseId].received += phasePaid;
-          phaseAnalytics[phaseId].pending += phasePending;
-          phaseAnalytics[phaseId].count += 1;
-        }
-        
         return {
-          name: phase.name,
-          percentage: phasePercentage,
-          amount: phaseAmount,
-          paid: phasePaid,
-          pending: phasePending,
-          isFinal: phase.isFinal || false,
-          status: milestone?.isApprovedByCustomer ? 'approved' : (milestone ? 'pending' : 'not_started'),
-          upfrontPaid,
-          completionPaid,
-          finalPaid
+          name: phase.phaseName,
+          percentage: phase.milestonePercentage,
+          amount: phase.phaseAmount,
+          paid: phase.companyReceived,
+          pending,
+          status: phase.isApprovedByCustomer ? 'approved' : (phase.customerPaid ? 'paid' : 'not_started'),
+          initialReleased: phase.initialReleased,
+          heldAmount: phase.heldAmount,
+          holdStatus: phase.holdStatus,
+          platformFee: phase.platformFee,
+          platformFeeStatus: phase.platformFeeStatus,
+          blockedByPreviousPlatformFee: phase.blockedByPreviousPlatformFee,
         };
       });
 
@@ -606,9 +691,8 @@ const submitProjectProposal = async (req, res) => {
     const { projectId, price, description, phases } = req.body;
     const companyId = req.user.user_id;
 
-    const PHASES_COUNT = 5;
+    const PHASES_COUNT = 4;
     const WORK_PHASE_PERCENTAGE = 25;
-    const FINAL_PHASE_PERCENTAGE = 10;
 
     const project = await ConstructionProjectSchema.findOne({ _id: projectId, companyId: companyId });
     if (!project) {
@@ -619,17 +703,9 @@ const submitProjectProposal = async (req, res) => {
       return res.status(400).json({ error: `Exactly ${PHASES_COUNT} phases are required.` });
     }
 
-    // Validate work phases (first 4) and final phase (last one)
-    const workPhases = phases.slice(0, 4);
-    const finalPhase = phases[4];
-
-    const invalidWorkPhase = workPhases.find(phase => parseFloat(phase.percentage) !== WORK_PHASE_PERCENTAGE);
+    const invalidWorkPhase = phases.find(phase => parseFloat(phase.percentage) !== WORK_PHASE_PERCENTAGE);
     if (invalidWorkPhase) {
       return res.status(400).json({ error: `Each work phase must be ${WORK_PHASE_PERCENTAGE}% of the project.` });
-    }
-
-    if (!finalPhase.isFinal || parseFloat(finalPhase.percentage) !== FINAL_PHASE_PERCENTAGE) {
-      return res.status(400).json({ error: `Final phase must be ${FINAL_PHASE_PERCENTAGE}% of the project.` });
     }
 
     project.status = 'proposal_sent';
@@ -739,6 +815,11 @@ const updatePassword = async (req, res) => {
       return res.status(401).json({ error: 'Current password is incorrect.' });
     }
 
+    const isSameAsOld = await bcrypt.compare(newPassword, company.password);
+    if (isSameAsOld) {
+      return res.status(400).json({ error: 'New password cannot be same as current password.' });
+    }
+
     // Update password (will be hashed by pre-save middleware in model)
     company.password = newPassword;
     await company.save();
@@ -754,5 +835,5 @@ module.exports = {
   getDashboard, getOngoingProjects, getProjectRequests, updateProjectStatusController, 
   getHiring, getSettings, getBids, getCompanyRevenue, createHireRequest,  
   updateCompanyProfile, handleWorkerRequest, submitBidController, submitProjectProposal, getEmployees,
-  updatePassword
+  updatePassword, uploadPlatformFeeInvoice
 };

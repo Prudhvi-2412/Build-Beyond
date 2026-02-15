@@ -14,6 +14,8 @@ const Settings = () => {
     newPassword: '',
     confirmPassword: ''
   });
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [updatingTwoFactor, setUpdatingTwoFactor] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -39,6 +41,18 @@ const Settings = () => {
         const data = await response.json();
         setUser(data.user);
         setAvailability(data.user.availability || 'available');
+
+        const twoFactorRes = await fetch('/api/2fa/status', {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        if (twoFactorRes.ok) {
+          const twoFactorData = await twoFactorRes.json();
+          setTwoFactorEnabled(Boolean(twoFactorData.twoFactorEnabled));
+        }
       } else {
         console.error('Failed to fetch user data');
       }
@@ -92,6 +106,11 @@ const Settings = () => {
       return;
     }
 
+    if (passwordForm.currentPassword === passwordForm.newPassword) {
+      alert('New password cannot be same as current password.');
+      return;
+    }
+
     try {
       const response = await fetch('/api/worker/password/update', {
         method: 'POST',
@@ -119,6 +138,34 @@ const Settings = () => {
     } catch (error) {
       console.error('Error:', error);
       alert('An error occurred. Please try again.');
+    }
+  };
+
+  const handleTwoFactorToggle = async () => {
+    setUpdatingTwoFactor(true);
+    try {
+      const nextValue = !twoFactorEnabled;
+      const response = await fetch('/api/2fa/status', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ enabled: nextValue })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        alert(data.message || 'Failed to update 2FA setting');
+        return;
+      }
+
+      setTwoFactorEnabled(nextValue);
+      alert(data.message || 'Two-factor setting updated');
+    } catch (error) {
+      alert('Failed to update 2FA setting');
+    } finally {
+      setUpdatingTwoFactor(false);
     }
   };
 
@@ -239,6 +286,9 @@ const Settings = () => {
               passwordForm={passwordForm}
               onPasswordChange={handlePasswordChange}
               onSubmit={handlePasswordSubmit}
+              twoFactorEnabled={twoFactorEnabled}
+              updatingTwoFactor={updatingTwoFactor}
+              onToggleTwoFactor={handleTwoFactorToggle}
             />
           )}
 

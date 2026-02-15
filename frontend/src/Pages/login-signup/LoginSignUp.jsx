@@ -5,12 +5,21 @@ import { useDispatch } from 'react-redux';
 import { fetchCustomerProfile } from '../../store/slices/customerProfileSlice';
 import "./LoginSignUp.css";
 
+const OTP_LENGTH = 6;
+const GOOGLE_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
 const LoginSignUp = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const [activeTab, setActiveTab] = useState("signin");
   const [userType, setUserType] = useState("customer");
   const [signinData, setSigninData] = useState({ email: "", password: "" });
+  const [signinTwoFactorRequired, setSigninTwoFactorRequired] = useState(false);
+  const [signinTwoFactorToken, setSigninTwoFactorToken] = useState("");
+  const [signinOtp, setSigninOtp] = useState(Array(OTP_LENGTH).fill(""));
+  const [signinOtpError, setSigninOtpError] = useState("");
+  const [signinResendSeconds, setSigninResendSeconds] = useState(0);
   const [signupData, setSignupData] = useState({
     name: "",
     email: "",
@@ -30,19 +39,105 @@ const LoginSignUp = () => {
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotStep, setForgotStep] = useState("email");
   const [forgotEmail, setForgotEmail] = useState("");
-  const [otp, setOtp] = useState(["", "", "", ""]);
+  const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(""));
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
-  const [generatedOTP, setGeneratedOTP] = useState("");
-  const [resendTimeoutId, setResendTimeoutId] = useState(null);
+  const [forgotVerificationToken, setForgotVerificationToken] = useState("");
+  const [forgotResendSeconds, setForgotResendSeconds] = useState(0);
   const [forgotError, setForgotError] = useState("");
+  const [signupOtpSent, setSignupOtpSent] = useState(false);
+  const [signupOtp, setSignupOtp] = useState(Array(OTP_LENGTH).fill(""));
+  const [signupEmailVerified, setSignupEmailVerified] = useState(false);
+  const [signupVerificationToken, setSignupVerificationToken] = useState("");
+  const [signupOtpError, setSignupOtpError] = useState("");
+  const [signupResendSeconds, setSignupResendSeconds] = useState(0);
   const otpRefs = useRef([]);
+  const signupOtpRefs = useRef([]);
+  const signinOtpRefs = useRef([]);
+  const googleBtnRef = useRef(null);
+  const [googleReady, setGoogleReady] = useState(false);
+  const [googleError, setGoogleError] = useState("");
 
   useEffect(() => {
     const hash = window.location.hash.substring(1);
     if (hash === "signup" || hash === "signin") setActiveTab(hash);
     checkSession();
   }, []);
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) {
+      setGoogleError("Google sign-in is not configured yet.");
+      return;
+    }
+
+    setGoogleError("");
+
+    const initializeGoogle = () => {
+      if (!window.google?.accounts?.id || !googleBtnRef.current) return;
+
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleCredential,
+      });
+
+      googleBtnRef.current.innerHTML = "";
+      window.google.accounts.id.renderButton(googleBtnRef.current, {
+        theme: "outline",
+        size: "large",
+        text: "signin_with",
+        shape: "pill",
+        width: 300,
+      });
+
+      setGoogleReady(true);
+      setGoogleError("");
+    };
+
+    if (window.google?.accounts?.id) {
+      initializeGoogle();
+      return;
+    }
+
+    const existingScript = document.querySelector(`script[src="${GOOGLE_SCRIPT_SRC}"]`);
+    if (existingScript) {
+      existingScript.addEventListener("load", initializeGoogle);
+      return () => existingScript.removeEventListener("load", initializeGoogle);
+    }
+
+    const script = document.createElement("script");
+    script.src = GOOGLE_SCRIPT_SRC;
+    script.async = true;
+    script.defer = true;
+    script.onload = initializeGoogle;
+    script.onerror = () => {
+      setGoogleError("Unable to load Google sign-in script.");
+      setGoogleReady(false);
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      script.onload = null;
+      script.onerror = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!forgotResendSeconds) return;
+    const timer = setTimeout(() => setForgotResendSeconds((prev) => prev - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [forgotResendSeconds]);
+
+  useEffect(() => {
+    if (!signupResendSeconds) return;
+    const timer = setTimeout(() => setSignupResendSeconds((prev) => prev - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [signupResendSeconds]);
+
+  useEffect(() => {
+    if (!signinResendSeconds) return;
+    const timer = setTimeout(() => setSigninResendSeconds((prev) => prev - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [signinResendSeconds]);
 
   const checkSession = async () => {
     try {
@@ -62,6 +157,13 @@ const LoginSignUp = () => {
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     setErrors({});
+    if (tab !== "signin") {
+      setSigninTwoFactorRequired(false);
+      setSigninTwoFactorToken("");
+      setSigninOtp(Array(OTP_LENGTH).fill(""));
+      setSigninOtpError("");
+      setSigninResendSeconds(0);
+    }
   };
 
   const handleUserTypeChange = (type) => {
@@ -73,8 +175,23 @@ const LoginSignUp = () => {
   const handleInputChange = (e, formType) => {
     const { id, value, type, checked } = e.target;
     if (formType === "signin") {
+      if (id === "signin-email" && signinTwoFactorRequired) {
+        setSigninTwoFactorRequired(false);
+        setSigninTwoFactorToken("");
+        setSigninOtp(Array(OTP_LENGTH).fill(""));
+        setSigninOtpError("");
+        setSigninResendSeconds(0);
+      }
       setSigninData({ ...signinData, [id.replace("signin-", "")]: value });
     } else if (formType === "signup") {
+      if (id === "email" && String(value || "").trim().toLowerCase() !== String(signupData.email || "").trim().toLowerCase()) {
+        setSignupEmailVerified(false);
+        setSignupVerificationToken("");
+        setSignupOtpSent(false);
+        setSignupOtp(Array(OTP_LENGTH).fill(""));
+        setSignupOtpError("");
+        setSignupResendSeconds(0);
+      }
       setSignupData({
         ...signupData,
         [id]: type === "checkbox" ? checked : value,
@@ -173,14 +290,6 @@ const LoginSignUp = () => {
       : "Invalid experience years";
   };
 
-  const resetFieldErrors = (fields) => {
-    setErrors((prev) => {
-      const copy = { ...prev };
-      fields.forEach((f) => delete copy[f]);
-      return copy;
-    });
-  };
-
   // Validation for signin
   const validateSignin = () => {
     const newErrors = {};
@@ -208,6 +317,9 @@ const LoginSignUp = () => {
     // common checks
     const emailErr = validateEmail(email);
     if (emailErr) newErrors.email = emailErr;
+    if (!emailErr && !signupEmailVerified) {
+      newErrors.emailVerification = "Verify your email with OTP";
+    }
 
     const phoneErr = validatePhone(phone);
     if (phoneErr) newErrors.phone = phoneErr;
@@ -274,11 +386,65 @@ const LoginSignUp = () => {
       });
       const data = await res.json();
       if (res.ok) {
+        if (data.requiresTwoFactor) {
+          setSigninTwoFactorRequired(true);
+          setSigninTwoFactorToken(data.twoFactorToken || "");
+          setSigninOtp(Array(OTP_LENGTH).fill(""));
+          setSigninOtpError("");
+          setSigninResendSeconds(30);
+          return;
+        }
+
         // Fetch and store customer profile in Redux
         dispatch(fetchCustomerProfile());
         navigate(data.redirect);
       } else setErrors({ general: data.message });
     } catch (err) {
+      setErrors({ general: "Server error" });
+    }
+  };
+
+  const handleGoogleCredential = async (googleResponse) => {
+    if (!googleResponse?.credential) {
+      setErrors({ general: "Google login failed. Please try again." });
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/login/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ credential: googleResponse.credential }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        const errorMsg = data.message || "Google login failed";
+        if (data.accountExists === false) {
+          setErrors({ 
+            general: `${errorMsg} Click "Sign Up" tab to create your account.` 
+          });
+        } else {
+          setErrors({ general: errorMsg });
+        }
+        return;
+      }
+
+      if (data.requiresTwoFactor) {
+        setSigninData((prev) => ({ ...prev, email: data.email || prev.email }));
+        setSigninTwoFactorRequired(true);
+        setSigninTwoFactorToken(data.twoFactorToken || "");
+        setSigninOtp(Array(OTP_LENGTH).fill(""));
+        setSigninOtpError("");
+        setSigninResendSeconds(30);
+        setErrors({});
+        return;
+      }
+
+      dispatch(fetchCustomerProfile());
+      navigate(data.redirect);
+    } catch (error) {
       setErrors({ general: "Server error" });
     }
   };
@@ -291,6 +457,7 @@ const LoginSignUp = () => {
     Object.keys(signupData).forEach((key) => {
       if (key !== "confirmPassword") formData.append(key, signupData[key]);
     });
+    formData.append("emailVerificationToken", signupVerificationToken);
     formData.append("role", userType);
     files.forEach((file) => formData.append("documents", file));
 
@@ -308,57 +475,77 @@ const LoginSignUp = () => {
     }
   };
 
-  // Forgot Password
-  const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString();
+  const startForgotCooldown = () => setForgotResendSeconds(30);
+  const startSignupCooldown = () => setSignupResendSeconds(30);
 
-  const disableResend = () => {
-    if (resendTimeoutId) clearInterval(resendTimeoutId);
-    let count = 30;
-    const id = setInterval(() => {
-      count--;
-      if (count <= 0) {
-        clearInterval(id);
-        setResendTimeoutId(null);
-      }
-    }, 1000);
-    setResendTimeoutId(id);
+  const sendOtpRequest = async ({ email, purpose }) => {
+    const res = await fetch("/api/email-otp/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email: String(email || "").trim().toLowerCase(), purpose }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Failed to send OTP");
+    return data;
   };
 
-  const handleSendOTP = () => {
+  const verifyOtpRequest = async ({ email, otpCode, purpose }) => {
+    const res = await fetch("/api/email-otp/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        email: String(email || "").trim().toLowerCase(),
+        otp: otpCode,
+        purpose,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Failed to verify OTP");
+    return data;
+  };
+
+  const handleSendOTP = async () => {
     const e = validateEmail(String(forgotEmail || "").trim());
     if (e) {
       setForgotError(e);
       return;
     }
-    const otpCode = generateOTP();
-    setGeneratedOTP(otpCode);
-    console.log("OTP:", otpCode);
-    setForgotStep("otp");
-    disableResend();
-    setForgotError("");
-  };
-
-  const handleVerifyOTP = () => {
-    if (otp.join("") === generatedOTP) {
+    try {
+      await sendOtpRequest({ email: forgotEmail, purpose: "forgot-password" });
+      setForgotStep("otp");
+      setOtp(Array(OTP_LENGTH).fill(""));
       setForgotError("");
-      setForgotStep("password");
-    } else {
-      setForgotError("Invalid OTP");
-      setOtp(["", "", "", ""]);
+      startForgotCooldown();
+    } catch (error) {
+      setForgotError(error.message);
     }
   };
 
-  const handleResendOTP = (e) => {
-    e.preventDefault();
-    if (resendTimeoutId) return;
-    const otpCode = generateOTP();
-    setGeneratedOTP(otpCode);
-    console.log("Resent OTP:", otpCode);
-    disableResend();
-    setOtp(["", "", "", ""]);
+  const handleVerifyOTP = async () => {
+    try {
+      const data = await verifyOtpRequest({
+        email: forgotEmail,
+        otpCode: otp.join(""),
+        purpose: "forgot-password",
+      });
+      setForgotVerificationToken(data.verificationToken);
+      setForgotError("");
+      setForgotStep("password");
+    } catch (error) {
+      setForgotError(error.message);
+      setOtp(Array(OTP_LENGTH).fill(""));
+    }
   };
 
-  const handleResetPassword = (e) => {
+  const handleResendOTP = async (e) => {
+    e.preventDefault();
+    if (forgotResendSeconds > 0) return;
+    await handleSendOTP();
+  };
+
+  const handleResetPassword = async (e) => {
     e.preventDefault();
     if (newPassword !== confirmNewPassword) {
       setForgotError("Passwords don't match");
@@ -369,10 +556,136 @@ const LoginSignUp = () => {
       setForgotError(pErr);
       return;
     }
-    // Call backend API to reset password here (omitted)
-    setShowForgotModal(false);
-    resetForgotForm();
-    setActiveTab("signin");
+    try {
+      const res = await fetch("/api/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          email: String(forgotEmail || "").trim().toLowerCase(),
+          newPassword,
+          verificationToken: forgotVerificationToken,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setForgotError(data.message || "Unable to reset password");
+        return;
+      }
+
+      setShowForgotModal(false);
+      resetForgotForm();
+      setActiveTab("signin");
+      setErrors({ general: "Password reset successful. Please sign in." });
+    } catch (error) {
+      setForgotError("Server error");
+    }
+  };
+
+  const handleSendSignupOTP = async () => {
+    const email = String(signupData.email || "").trim();
+    const emailErr = validateEmail(email);
+    if (emailErr) {
+      setSignupOtpError(emailErr);
+      return;
+    }
+    try {
+      await sendOtpRequest({ email, purpose: "signup" });
+      setSignupOtpSent(true);
+      setSignupOtp(Array(OTP_LENGTH).fill(""));
+      setSignupOtpError("");
+      startSignupCooldown();
+    } catch (error) {
+      setSignupOtpError(error.message);
+    }
+  };
+
+  const handleVerifySignupOTP = async () => {
+    try {
+      const data = await verifyOtpRequest({
+        email: signupData.email,
+        otpCode: signupOtp.join(""),
+        purpose: "signup",
+      });
+
+      setSignupVerificationToken(data.verificationToken);
+      setSignupEmailVerified(true);
+      setSignupOtpError("");
+      setErrors((prev) => ({ ...prev, emailVerification: undefined }));
+    } catch (error) {
+      setSignupOtpError(error.message);
+      setSignupOtp(Array(OTP_LENGTH).fill(""));
+    }
+  };
+
+  const handleResendSignupOTP = async (e) => {
+    e.preventDefault();
+    if (signupResendSeconds > 0) return;
+    await handleSendSignupOTP();
+  };
+
+  const handleSigninOtpChange = (i, val) => {
+    if (val.length > 1) return;
+    const newOtp = [...signinOtp];
+    newOtp[i] = val.replace(/\D/g, "");
+    setSigninOtp(newOtp);
+    if (val && i < OTP_LENGTH - 1) signinOtpRefs.current[i + 1]?.focus();
+  };
+
+  const handleSigninOtpKeyDown = (i, e) => {
+    if (e.key === "Backspace" && !signinOtp[i] && i > 0) {
+      signinOtpRefs.current[i - 1]?.focus();
+    }
+  };
+
+  const handleVerifySigninOtp = async () => {
+    try {
+      const res = await fetch("/api/login/2fa/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          email: String(signinData.email || "").trim().toLowerCase(),
+          otp: signinOtp.join(""),
+          twoFactorToken: signinTwoFactorToken,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSigninOtpError(data.message || "Invalid OTP");
+        return;
+      }
+
+      dispatch(fetchCustomerProfile());
+      navigate(data.redirect);
+    } catch (error) {
+      setSigninOtpError("Server error");
+    }
+  };
+
+  const handleResendSigninOtp = async (e) => {
+    e.preventDefault();
+    if (signinResendSeconds > 0) return;
+    try {
+      const res = await fetch("/api/login/2fa/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ twoFactorToken: signinTwoFactorToken }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSigninOtpError(data.message || "Unable to resend OTP");
+        return;
+      }
+
+      setSigninTwoFactorToken(data.twoFactorToken || signinTwoFactorToken);
+      setSigninResendSeconds(30);
+      setSigninOtp(Array(OTP_LENGTH).fill(""));
+      setSigninOtpError("");
+    } catch (error) {
+      setSigninOtpError("Server error");
+    }
   };
 
   const handleOtpChange = (i, val) => {
@@ -380,7 +693,7 @@ const LoginSignUp = () => {
     const newOtp = [...otp];
     newOtp[i] = val.replace(/\D/g, "");
     setOtp(newOtp);
-    if (val && i < 3) otpRefs.current[i + 1]?.focus();
+    if (val && i < OTP_LENGTH - 1) otpRefs.current[i + 1]?.focus();
   };
 
   const handleOtpKeyDown = (i, e) => {
@@ -389,14 +702,27 @@ const LoginSignUp = () => {
     }
   };
 
+  const handleSignupOtpChange = (i, val) => {
+    if (val.length > 1) return;
+    const newOtp = [...signupOtp];
+    newOtp[i] = val.replace(/\D/g, "");
+    setSignupOtp(newOtp);
+    if (val && i < OTP_LENGTH - 1) signupOtpRefs.current[i + 1]?.focus();
+  };
+
+  const handleSignupOtpKeyDown = (i, e) => {
+    if (e.key === "Backspace" && !signupOtp[i] && i > 0) {
+      signupOtpRefs.current[i - 1]?.focus();
+    }
+  };
+
   const resetForgotForm = () => {
     setForgotEmail("");
-    setOtp(["", "", "", ""]);
+    setOtp(Array(OTP_LENGTH).fill(""));
     setNewPassword("");
     setConfirmNewPassword("");
-    setGeneratedOTP("");
-    if (resendTimeoutId) clearInterval(resendTimeoutId);
-    setResendTimeoutId(null);
+    setForgotVerificationToken("");
+    setForgotResendSeconds(0);
     setForgotError("");
     setForgotStep("email");
   };
@@ -496,6 +822,39 @@ const LoginSignUp = () => {
                     </div>
                   </div>
 
+                  {signinTwoFactorRequired && (
+                    <div className="ls-signup-otp-box" style={{ marginBottom: "14px" }}>
+                      <p style={{ marginBottom: "8px" }}>Enter OTP sent to your email</p>
+                      <div className="ls-otp-container" style={{ margin: "0 0 8px" }}>
+                        {signinOtp.map((digit, i) => (
+                          <input
+                            key={i}
+                            type="text"
+                            maxLength="1"
+                            className="ls-otp-input"
+                            value={digit}
+                            onChange={(e) => handleSigninOtpChange(i, e.target.value)}
+                            onKeyDown={(e) => handleSigninOtpKeyDown(i, e)}
+                            ref={(el) => (signinOtpRefs.current[i] = el)}
+                          />
+                        ))}
+                      </div>
+                      <button type="button" className="ls-btn ls-otp-action-btn ls-w-100" onClick={handleVerifySigninOtp}>
+                        Verify OTP
+                      </button>
+                      <div style={{ marginTop: "8px" }}>
+                        <a
+                          href="#"
+                          onClick={handleResendSigninOtp}
+                          className={signinResendSeconds > 0 ? "ls-disabled" : ""}
+                        >
+                          {signinResendSeconds > 0 ? `Resend Code (${signinResendSeconds}s)` : "Resend Code"}
+                        </a>
+                      </div>
+                      {signinOtpError && <div className="ls-validation-error">{signinOtpError}</div>}
+                    </div>
+                  )}
+
                   <div className="ls-form-options">
                     <a
                       href="#"
@@ -508,12 +867,28 @@ const LoginSignUp = () => {
                     </a>
                   </div>
 
-                  <button
-                    type="submit"
-                    className="ls-btn ls-btn-primary ls-w-100"
-                  >
-                    Sign In
-                  </button>
+                  {!signinTwoFactorRequired && (
+                    <button
+                      type="submit"
+                      className="ls-btn ls-btn-primary ls-w-100"
+                    >
+                      Sign In
+                    </button>
+                  )}
+                  {!signinTwoFactorRequired && (
+                    <>
+                      <div className="ls-auth-divider"><span>or continue with</span></div>
+                      <div className="ls-google-btn-wrap">
+                        <div ref={googleBtnRef} className="ls-google-btn" />
+                      </div>
+                      {!googleReady && GOOGLE_CLIENT_ID && !googleError && (
+                        <p className="ls-google-loading">Loading Google sign-in...</p>
+                      )}
+                      {googleError && (
+                        <p className="ls-google-error">{googleError}</p>
+                      )}
+                    </>
+                  )}
                   {errors.general && (
                     <div className="ls-validation-error">{errors.general}</div>
                   )}
@@ -618,6 +993,55 @@ const LoginSignUp = () => {
                           required
                         />
                         <div className="ls-error-message">{errors.email}</div>
+                        {!signupEmailVerified && (
+                          <button
+                            type="button"
+                            className="ls-btn ls-otp-action-btn"
+                            onClick={handleSendSignupOTP}
+                            style={{ marginTop: "8px" }}
+                          >
+                            {signupOtpSent ? "Send OTP Again" : "Send OTP"}
+                          </button>
+                        )}
+                        {signupEmailVerified && (
+                          <div className="ls-success-text" style={{ marginTop: "8px" }}>
+                            Email verified successfully
+                          </div>
+                        )}
+                        {signupOtpSent && !signupEmailVerified && (
+                          <div className="ls-signup-otp-box" style={{ marginTop: "10px" }}>
+                            <div className="ls-otp-container" style={{ marginBottom: "8px" }}>
+                              {signupOtp.map((digit, i) => (
+                                <input
+                                  key={i}
+                                  type="text"
+                                  maxLength="1"
+                                  className="ls-otp-input"
+                                  value={digit}
+                                  onChange={(e) => handleSignupOtpChange(i, e.target.value)}
+                                  onKeyDown={(e) => handleSignupOtpKeyDown(i, e)}
+                                  ref={(el) => (signupOtpRefs.current[i] = el)}
+                                />
+                              ))}
+                            </div>
+                            <button type="button" className="ls-btn ls-otp-action-btn" onClick={handleVerifySignupOTP}>
+                              Verify Email OTP
+                            </button>
+                            <div style={{ marginTop: "6px" }}>
+                              <a
+                                href="#"
+                                onClick={handleResendSignupOTP}
+                                className={signupResendSeconds > 0 ? "ls-disabled" : ""}
+                              >
+                                {signupResendSeconds > 0 ? `Resend Code (${signupResendSeconds}s)` : "Resend Code"}
+                              </a>
+                            </div>
+                          </div>
+                        )}
+                        {signupOtpError && <div className="ls-validation-error">{signupOtpError}</div>}
+                        {errors.emailVerification && (
+                          <div className="ls-validation-error">{errors.emailVerification}</div>
+                        )}
                       </div>
                     </div>
 
@@ -867,9 +1291,9 @@ const LoginSignUp = () => {
                   <a
                     href="#"
                     onClick={handleResendOTP}
-                    className={resendTimeoutId ? "ls-disabled" : ""}
+                    className={forgotResendSeconds > 0 ? "ls-disabled" : ""}
                   >
-                    {resendTimeoutId ? "Resend Code (30s)" : "Resend Code"}
+                    {forgotResendSeconds > 0 ? `Resend Code (${forgotResendSeconds}s)` : "Resend Code"}
                   </a>
                 </div>
               )}

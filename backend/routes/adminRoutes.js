@@ -26,6 +26,9 @@ const {
   getBidDetail,
   getJobApplicationDetail,
   getAdminRevenue,
+  getPlatformRevenueIntelligence,
+  getRedisCacheStatsAdmin,
+  resetRedisCacheStatsAdmin,
 } = require("../controllers/adminController");
 const {
   getAdminAnalytics,
@@ -58,6 +61,9 @@ router.get("/admin/analytics", authadmin, getAdminAnalytics);
 
 // Admin revenue analytics route (protected)
 router.get("/admin/revenue", authadmin, getAdminRevenue);
+router.get("/admin/revenue/platform-intelligence", authadmin, getPlatformRevenueIntelligence);
+router.get("/admin/cache/redis-stats", authadmin, getRedisCacheStatsAdmin);
+router.post("/admin/cache/redis-stats/reset", authadmin, resetRedisCacheStatsAdmin);
 
 // Admin System Settings routes
 router.get("/admin/settings", authadmin, getSettings);

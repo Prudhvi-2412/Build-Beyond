@@ -17,8 +17,10 @@ const {
   submitProjectProposal,
   getEmployees,
   updatePassword,
+  uploadPlatformFeeInvoice,
 } = require("../controllers/companyController");
 const isAuthenticated = require("../middlewares/auth");
+const { upload: cloudUpload } = require("../middlewares/upload");
 
 // Create a Multer instance for handling FormData
 const upload = multer();
@@ -58,5 +60,6 @@ router.post(
 router.post("/submit-bid", isAuthenticated, submitBidController);
 router.post("/company/submit-proposal", isAuthenticated, submitProjectProposal);
 router.post("/company/password/update", isAuthenticated, updatePassword);
+router.post("/company/platform-fee-invoice", isAuthenticated, cloudUpload.single('invoice'), uploadPlatformFeeInvoice);
 
 module.exports = router;

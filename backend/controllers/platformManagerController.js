@@ -6,8 +6,23 @@ const {
   Customer,
   Company, 
   Worker,
-  TaskAssignmentCounter 
+  TaskAssignmentCounter,
+  ConstructionProjectSchema,
+  ArchitectHiring,
+  DesignRequest,
+  Transaction,
 } = require('../models');
+const { invalidateCacheByPrefix } = require('../utils/redisCache');
+
+const ADMIN_REVENUE_INTELLIGENCE_CACHE_PREFIX = 'admin:platform-revenue-intelligence:v1';
+
+const invalidateAdminRevenueIntelligenceCache = async () => {
+  try {
+    await invalidateCacheByPrefix(ADMIN_REVENUE_INTELLIGENCE_CACHE_PREFIX);
+  } catch (error) {
+    console.error('Failed to invalidate admin revenue intelligence cache:', error.message);
+  }
+};
 
 // ============================================
 // SUPERADMIN Functions - Manage Platform Managers
@@ -760,6 +775,246 @@ const replyToComplaintPM = async (req, res) => {
   }
 };
 
+const getCompanyPaymentQueue = async (req, res) => {
+  try {
+    const [constructionProjects, architectProjects, interiorProjects] = await Promise.all([
+      ConstructionProjectSchema.find({
+        'paymentDetails.payouts.platformFeeStatus': 'pending',
+      })
+        .populate('companyId', 'companyName contactPerson email')
+        .populate('customerId', 'name email')
+        .sort({ updatedAt: -1 })
+        .lean(),
+      ArchitectHiring.find({
+        'paymentDetails.milestonePayments.platformFeeStatus': 'pending',
+      })
+        .populate('worker', 'name email')
+        .populate('customer', 'name email')
+        .sort({ updatedAt: -1 })
+        .lean(),
+      DesignRequest.find({
+        'paymentDetails.milestonePayments.platformFeeStatus': 'pending',
+      })
+        .populate('workerId', 'name email')
+        .populate('customerId', 'name email')
+        .sort({ updatedAt: -1 })
+        .lean(),
+    ]);
+
+    const items = [];
+    constructionProjects.forEach((project) => {
+      (project.paymentDetails?.payouts || []).forEach((payout) => {
+        if (payout.platformFeeStatus !== 'pending') return;
+
+        items.push({
+          itemType: 'company',
+          projectType: 'construction',
+          projectId: project._id,
+          projectName: project.projectName,
+          assigneeName: project.companyId?.companyName || 'Unknown company',
+          assigneeEmail: project.companyId?.email || '',
+          customerName: project.customerId?.name || 'Unknown customer',
+          milestonePercentage: payout.milestonePercentage,
+          phaseName: payout.phaseName || `${payout.milestonePercentage}% Phase`,
+          phaseAmount: payout.amount || 0,
+          platformFee: payout.platformFee || 0,
+          invoiceUrl: payout.platformFeeInvoiceUrl || null,
+          invoiceUploadedAt: payout.platformFeeInvoiceUploadedAt || null,
+          releasedAt: payout.releaseDate || null,
+        });
+      });
+    });
+
+    architectProjects.forEach((project) => {
+      (project.paymentDetails?.milestonePayments || []).forEach((milestone) => {
+        if ((milestone.platformFeeStatus || 'not_due') !== 'pending') return;
+
+        items.push({
+          itemType: 'worker',
+          projectType: 'architect',
+          projectId: project._id,
+          projectName: project.projectName || 'Architect Project',
+          assigneeName: project.worker?.name || 'Unknown worker',
+          assigneeEmail: project.worker?.email || '',
+          customerName: project.customer?.name || 'Unknown customer',
+          milestonePercentage: milestone.percentage,
+          phaseName: `${milestone.percentage}% Milestone`,
+          phaseAmount: milestone.amount || 0,
+          platformFee: milestone.platformFee || 0,
+          releasedAt: milestone.releasedAt || null,
+        });
+      });
+    });
+
+    interiorProjects.forEach((project) => {
+      (project.paymentDetails?.milestonePayments || []).forEach((milestone) => {
+        if ((milestone.platformFeeStatus || 'not_due') !== 'pending') return;
+
+        items.push({
+          itemType: 'worker',
+          projectType: 'interior',
+          projectId: project._id,
+          projectName: project.projectName || 'Interior Project',
+          assigneeName: project.workerId?.name || 'Unknown worker',
+          assigneeEmail: project.workerId?.email || '',
+          customerName: project.customerId?.name || 'Unknown customer',
+          milestonePercentage: milestone.percentage,
+          phaseName: `${milestone.percentage}% Milestone`,
+          phaseAmount: milestone.amount || 0,
+          platformFee: milestone.platformFee || 0,
+          releasedAt: milestone.releasedAt || null,
+        });
+      });
+    });
+
+    res.json({
+      success: true,
+      summary: {
+        totalItems: items.length,
+        totalPendingFees: items.reduce((sum, item) => sum + Number(item.platformFee || 0), 0),
+      },
+      items,
+    });
+  } catch (error) {
+    console.error('Error fetching company payment queue:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+const collectCompanyPlatformFee = async (req, res) => {
+  try {
+    const { projectId, milestonePercentage } = req.params;
+    const { notes, projectType = 'construction' } = req.body || {};
+
+    if (projectType === 'construction') {
+      const project = await ConstructionProjectSchema.findById(projectId);
+      if (!project) {
+        return res.status(404).json({ success: false, error: 'Project not found' });
+      }
+
+      const payout = (project.paymentDetails?.payouts || []).find(
+        (entry) => Number(entry.milestonePercentage) === Number(milestonePercentage),
+      );
+      if (!payout || payout.platformFeeStatus !== 'pending') {
+        return res.status(400).json({ success: false, error: 'Pending platform fee not found for this phase' });
+      }
+      if (!payout.platformFeeInvoiceUrl) {
+        return res.status(400).json({ success: false, error: 'Invoice proof is required before verification' });
+      }
+
+      payout.platformFeeStatus = 'collected';
+      payout.platformFeeCollectedAt = new Date();
+      payout.platformFeeCollectedBy = req.admin?.id || null;
+
+      const allReleased = (project.paymentDetails?.payouts || []).every((entry) => entry.status === 'released');
+      const allFeesCollected = (project.paymentDetails?.payouts || []).every(
+        (entry) => ['collected', 'not_due'].includes(entry.platformFeeStatus || 'not_due'),
+      );
+      if (allReleased && allFeesCollected) {
+        project.paymentDetails.paymentStatus = 'completed';
+      }
+
+      await project.save();
+
+      const transaction = new Transaction({
+        transactionType: 'platform_fee_collection',
+        amount: payout.platformFee || 0,
+        platformFee: payout.platformFee || 0,
+        netAmount: 0,
+        projectId: project._id,
+        projectType: 'construction',
+        companyId: project.companyId,
+        customerId: project.customerId,
+        milestonePercentage: Number(milestonePercentage),
+        status: 'completed',
+        paymentMethod: 'bank_transfer',
+        description: `Platform fee collected — ${payout.phaseName || `${milestonePercentage}% phase`}`,
+        notes: notes || '',
+        processedAt: new Date(),
+      });
+      await transaction.save();
+
+      await invalidateAdminRevenueIntelligenceCache();
+
+      return res.json({
+        success: true,
+        message: 'Platform fee collected successfully',
+        data: {
+          projectId,
+          projectType,
+          milestonePercentage: Number(milestonePercentage),
+          platformFee: payout.platformFee || 0,
+        },
+      });
+    }
+
+    const Project = projectType === 'architect' ? ArchitectHiring : projectType === 'interior' ? DesignRequest : null;
+    if (!Project) {
+      return res.status(400).json({ success: false, error: 'Invalid project type for worker fee collection' });
+    }
+
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+
+    const milestone = (project.paymentDetails?.milestonePayments || []).find(
+      (entry) => Number(entry.percentage) === Number(milestonePercentage),
+    );
+    if (!milestone || (milestone.platformFeeStatus || 'not_due') !== 'pending') {
+      return res.status(400).json({ success: false, error: 'Pending worker platform fee not found for this milestone' });
+    }
+
+    milestone.platformFeeStatus = 'collected';
+    milestone.platformFeeCollectedAt = new Date();
+    milestone.platformFeeCollectedBy = req.admin?.id || null;
+
+    const allReleased = (project.paymentDetails?.milestonePayments || []).every((entry) => entry.status === 'released');
+    const allFeesCollected = (project.paymentDetails?.milestonePayments || []).every(
+      (entry) => ['collected', 'not_due'].includes(entry.platformFeeStatus || 'not_due'),
+    );
+    if (allReleased && allFeesCollected) {
+      project.paymentDetails.escrowStatus = 'fully_released';
+    }
+
+    await project.save();
+
+    const transaction = new Transaction({
+      transactionType: 'platform_fee_collection',
+      amount: milestone.platformFee || 0,
+      platformFee: milestone.platformFee || 0,
+      netAmount: 0,
+      projectId: project._id,
+      projectType,
+      workerId: project.worker || project.workerId,
+      customerId: project.customer || project.customerId,
+      milestonePercentage: Number(milestonePercentage),
+      status: 'completed',
+      paymentMethod: 'bank_transfer',
+      description: `Worker platform fee collected — ${milestonePercentage}% milestone`,
+      notes: notes || '',
+      processedAt: new Date(),
+    });
+    await transaction.save();
+
+    await invalidateAdminRevenueIntelligenceCache();
+
+    return res.json({
+      success: true,
+      message: 'Worker platform fee collected successfully',
+      data: {
+        projectId,
+        projectType,
+        milestonePercentage: Number(milestonePercentage),
+        platformFee: milestone.platformFee || 0,
+      },
+    });
+  } catch (error) {
+    console.error('Error collecting company platform fee:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   // Superadmin functions
   createPlatformManager,
@@ -779,5 +1034,7 @@ module.exports = {
   changePlatformManagerPassword,
   processVerificationTask,
   getComplaintDetailsPM,
-  replyToComplaintPM
+  replyToComplaintPM,
+  getCompanyPaymentQueue,
+  collectCompanyPlatformFee,
 };

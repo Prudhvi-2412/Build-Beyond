@@ -1,5 +1,5 @@
 // src/pages/company/CompanyOngoing.jsx
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import MetricsCard from './components/MetricsCard';
 import ProjectCard from './components/ProjectCard';
@@ -31,8 +31,7 @@ const CompanyOngoing = () => {
   /* -------------------------------------------------
    *  Load data
    * -------------------------------------------------*/
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchData = useCallback(async () => {
       try {
         setLoading(true);
         const res = await fetch("http://localhost:3000/api/companyongoing_projects", {
@@ -67,9 +66,11 @@ const CompanyOngoing = () => {
       } finally {
         setLoading(false);
       }
-    };
+    }, []);
+
+  useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   /* -------------------------------------------------
    *  Filter
@@ -254,6 +255,7 @@ const CompanyOngoing = () => {
                 <ProjectUpdates
                   project={project}
                   expandedUpdates={expandedUpdates}
+                  onRefresh={fetchData}
                 />
               </React.Fragment>
             ))

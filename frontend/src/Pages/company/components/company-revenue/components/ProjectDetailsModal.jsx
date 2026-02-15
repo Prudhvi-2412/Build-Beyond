@@ -55,16 +55,16 @@ const ProjectDetailsModal = ({
                   <div 
                     key={idx}
                     style={{
-                      backgroundColor: phase.isFinal ? '#fff3e0' : '#f5f5f5',
+                      backgroundColor: '#f5f5f5',
                       padding: '15px',
                       borderRadius: '8px',
-                      borderLeft: phase.isFinal ? '4px solid #d32f2f' : '4px solid #1a73e8'
+                      borderLeft: '4px solid #1a73e8'
                     }}
                   >
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
                       <div>
-                        <strong style={{fontSize: '14px', color: phase.isFinal ? '#d32f2f' : '#1a73e8'}}>
-                          {phase.isFinal ? '🎯 ' : ''}{phase.name}
+                        <strong style={{fontSize: '14px', color: '#1a73e8'}}>
+                          {phase.name}
                         </strong>
                         <span style={{
                           marginLeft: '10px', 
@@ -77,7 +77,7 @@ const ProjectDetailsModal = ({
                           {phase.status === 'approved' ? '✓ Approved' : phase.status === 'pending' ? '⏳ Pending' : 'Not Started'}
                         </span>
                       </div>
-                      <div style={{fontSize: '16px', fontWeight: 'bold', color: phase.isFinal ? '#d32f2f' : '#1a73e8'}}>
+                      <div style={{fontSize: '16px', fontWeight: 'bold', color: '#1a73e8'}}>
                         {phase.percentage}%
                       </div>
                     </div>
@@ -102,29 +102,34 @@ const ProjectDetailsModal = ({
                     </div>
 
                     {/* Payment Details */}
-                    {(phase.upfrontPaid > 0 || phase.completionPaid > 0 || phase.finalPaid > 0) && (
+                    {(phase.initialReleased > 0 || phase.heldAmount > 0 || phase.platformFee > 0) && (
                       <div style={{marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #ccc'}}>
                         <div style={{fontSize: '11px', color: '#666', marginBottom: '5px'}}>Payment Details:</div>
                         <div style={{display: 'flex', gap: '15px', fontSize: '11px'}}>
-                          {phase.upfrontPaid > 0 && (
+                          {phase.initialReleased > 0 && (
                             <div>
-                              <span style={{color: '#666'}}>Upfront (40%):</span> 
-                              <strong style={{marginLeft: '4px', color: '#4caf50'}}>{formatCurrency(phase.upfrontPaid)}</strong>
+                              <span style={{color: '#666'}}>Initial 75%:</span> 
+                              <strong style={{marginLeft: '4px', color: '#4caf50'}}>{formatCurrency(phase.initialReleased)}</strong>
                             </div>
                           )}
-                          {phase.completionPaid > 0 && (
+                          {phase.heldAmount > 0 && (
                             <div>
-                              <span style={{color: '#666'}}>Completion (60%):</span> 
-                              <strong style={{marginLeft: '4px', color: '#4caf50'}}>{formatCurrency(phase.completionPaid)}</strong>
+                              <span style={{color: '#666'}}>Held 25%:</span> 
+                              <strong style={{marginLeft: '4px', color: '#4caf50'}}>{formatCurrency(phase.heldAmount)}</strong>
                             </div>
                           )}
-                          {phase.finalPaid > 0 && (
+                          {phase.platformFee > 0 && (
                             <div>
-                              <span style={{color: '#666'}}>Final Payment:</span> 
-                              <strong style={{marginLeft: '4px', color: '#4caf50'}}>{formatCurrency(phase.finalPaid)}</strong>
+                              <span style={{color: '#666'}}>Platform Fee:</span> 
+                              <strong style={{marginLeft: '4px', color: phase.platformFeeStatus === 'collected' ? '#4caf50' : '#b45309'}}>{formatCurrency(phase.platformFee)}</strong>
                             </div>
                           )}
                         </div>
+                        {phase.platformFee > 0 && (
+                          <div style={{marginTop: '6px', fontSize: '11px', color: phase.platformFeeStatus === 'collected' ? '#15803d' : '#b45309'}}>
+                            Platform fee status: {phase.platformFeeStatus === 'collected' ? 'Collected' : phase.platformFeeStatus === 'pending' ? 'Pending collection' : 'Not due yet'}
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -134,7 +139,7 @@ const ProjectDetailsModal = ({
                         <div style={{
                           width: `${phaseCollectionRate}%`, 
                           height: '100%', 
-                          backgroundColor: phase.isFinal ? '#d32f2f' : '#1a73e8',
+                          backgroundColor: '#1a73e8',
                           transition: 'width 0.3s ease'
                         }}></div>
                       </div>

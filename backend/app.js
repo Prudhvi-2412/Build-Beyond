@@ -18,6 +18,8 @@ const chatRoutes = require("./routes/chatRoutes");
 const complaintRoutes = require("./routes/complaintRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const platformManagerRoutes = require("./routes/platformManagerRoutes");
+const { setupSwagger } = require("./config/swagger");
+const { initRedis } = require("./utils/redisClient");
 
 const {
   PORT,
@@ -68,6 +70,7 @@ app.use(
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 connectDB();
+initRedis();
 
 app.get("/", (req, res) => {
   res.status(200).json({ view: "landing_page" });
@@ -91,16 +94,22 @@ app.get("/platformadmindashboard", (req, res) => {
 });
 
 // app.js
-app.use("/api", authRoutes);
-app.use("/api", customerRoutes);
-app.use("/api", companyRoutes);
-app.use("/api", workerRoutes);
-app.use("/api", projectRoutes);
-app.use("/api", adminRoutes);
-app.use("/api", platformManagerRoutes);
-app.use("/api", chatRoutes);
-app.use("/api/complaints", complaintRoutes);
-app.use("/api/payment", paymentRoutes);
+const routeMounts = [
+  { basePath: "/api", router: authRoutes },
+  { basePath: "/api", router: customerRoutes },
+  { basePath: "/api", router: companyRoutes },
+  { basePath: "/api", router: workerRoutes },
+  { basePath: "/api", router: projectRoutes },
+  { basePath: "/api", router: adminRoutes },
+  { basePath: "/api", router: platformManagerRoutes },
+  { basePath: "/api", router: chatRoutes },
+  { basePath: "/api/complaints", router: complaintRoutes },
+  { basePath: "/api/payment", router: paymentRoutes },
+];
+
+routeMounts.forEach(({ basePath, router }) => {
+  app.use(basePath, router);
+});
 
 // Client-side error logging endpoint
 const logErrorToFile = require("./utils/errorLogger");
@@ -121,6 +130,8 @@ app.post("/api/log-client-error", (req, res) => {
   );
   res.status(200).json({ success: true });
 });
+
+setupSwagger(app, routeMounts);
 
 // 404 Not Found handler - must be after all routes
 app.use((req, res, next) => {
@@ -209,7 +220,33 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+const MAX_PORT_RETRIES = 10;
+let currentPort = Number(PORT) || 3000;
+let retryCount = 0;
+
+server.on("error", (error) => {
+  if (error && error.code === "EADDRINUSE") {
+    if (retryCount >= MAX_PORT_RETRIES) {
+      console.error(
+        `Port ${currentPort} is in use and retry limit reached (${MAX_PORT_RETRIES}). Exiting.`,
+      );
+      process.exit(1);
+    }
+
+    const nextPort = currentPort + 1;
+    retryCount += 1;
+    console.warn(
+      `Port ${currentPort} is in use. Retrying on http://localhost:${nextPort}...`,
+    );
+    currentPort = nextPort;
+    setTimeout(() => server.listen(currentPort), 150);
+    return;
+  }
+
+  throw error;
+});
+
+server.listen(currentPort, () => {
+  console.log(`Server running at http://localhost:${currentPort}`);
   console.log(`Accepting requests from http://localhost:5173`);
 });

@@ -1,8 +1,11 @@
 // src/Pages/customer/components/customer-ongoing/CustomerOngoing.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import "./CustomerOngoing.css";
 import Modal from "react-modal";
+import CompanyPaymentModal from "../customer-payments/CompanyPaymentModal";
+
+const CURRENCY_EPSILON = 0.01;
 
 const CustomerOngoing = () => {
   const [projects, setProjects] = useState([]);
@@ -26,6 +29,9 @@ const CustomerOngoing = () => {
   const [complaintHistory, setComplaintHistory] = useState([]);
   const [complaintHistoryLoading, setComplaintHistoryLoading] = useState(false);
   const [unviewedMessages, setUnviewedMessages] = useState({}); // { projectId: count }
+
+  // Company payment modal state
+  const [paymentModal, setPaymentModal] = useState(null); // { project, phaseIndex, paymentStage }
 
   const getProposalPhases = (project) =>
     Array.isArray(project?.proposal?.phases) ? project.proposal.phases : [];
@@ -61,43 +67,46 @@ const CustomerOngoing = () => {
     const phase = getPhaseForMilestone(project, milestone.percentage);
     if (!phase) return null;
 
-    const isFinalPhase = phase.isFinal === true;
+    const payout = (project?.paymentDetails?.payouts || []).find(
+      (entry) => Number(entry.milestonePercentage) === Number(milestone.percentage),
+    );
+
     const baseAmount =
       project?.paymentDetails?.totalAmount || project?.proposal?.price || 0;
-    const phaseAmount =
-      parseFloat(phase.amount) ||
-      baseAmount * ((phase.percentage || 0) / 100) ||
-      0;
+    const phaseAmount = payout
+      ? Number(payout.amount || 0)
+      : parseFloat(phase.amount) ||
+        baseAmount * ((phase.percentage || 0) / 100) ||
+        0;
 
-    if (isFinalPhase) {
-      return {
-        upfront: { amount: 0, status: "not_applicable", label: "N/A" },
-        completion: {
-          amount: phaseAmount,
-          status: milestone.payments?.completion?.status || "pending",
-          label: `Final: ₹${formatCurrency(phaseAmount)}`,
-        },
-        final: { amount: 0, status: "not_applicable", label: "N/A" },
-      };
-    } else {
-      // Work phases: 40% upfront, 60% completion
-      const upfrontAmount = phaseAmount * 0.4;
-      const completionAmount = phaseAmount * 0.6;
+    const upfrontAmount = payout
+      ? Number(payout.immediateReleaseAmount || phaseAmount * 0.75)
+      : phaseAmount * 0.75;
+    const completionAmount = Math.max(phaseAmount - upfrontAmount, 0);
 
-      return {
-        upfront: {
-          amount: upfrontAmount,
-          status: milestone.payments?.upfront?.status || "pending",
-          label: `Upfront: ₹${formatCurrency(upfrontAmount)}`,
-        },
-        completion: {
-          amount: completionAmount,
-          status: milestone.payments?.completion?.status || "pending",
-          label: `Completion: ₹${formatCurrency(completionAmount)}`,
-        },
-        final: { amount: 0, status: "not_applicable", label: "N/A" },
-      };
-    }
+    const paidSoFar = Number(payout?.customerPaidAmount || 0);
+    const paidUpfront = Math.min(paidSoFar, upfrontAmount);
+    const paidCompletion = Math.max(0, paidSoFar - upfrontAmount);
+
+    const upfrontStatusFromPayout = paidUpfront >= upfrontAmount - CURRENCY_EPSILON ? "released" : "pending";
+    const completionStatusFromPayout =
+      payout?.status === "released" || paidCompletion >= completionAmount - CURRENCY_EPSILON
+        ? "released"
+        : "pending";
+
+    return {
+      upfront: {
+        amount: upfrontAmount,
+        status: payout ? upfrontStatusFromPayout : (milestone.payments?.upfront?.status || "pending"),
+        label: `Released now: ₹${formatCurrency(upfrontAmount)}`,
+      },
+      completion: {
+        amount: completionAmount,
+        status: payout ? completionStatusFromPayout : (milestone.payments?.completion?.status || "pending"),
+        label: `Held till approval: ₹${formatCurrency(completionAmount)}`,
+      },
+      final: { amount: 0, status: "not_applicable", label: "N/A" },
+    };
   };
 
   // Fetch projects from API
@@ -254,44 +263,25 @@ const CustomerOngoing = () => {
     }
   };
 
-  const handlePayMilestone = async (
-    projectId,
-    milestonePercentage,
-    paymentStage,
-  ) => {
-    // paymentStage: 'upfront', 'completion', or 'final'
-    const stageLabels = {
-      upfront: "40% Upfront Payment",
-      completion: "60% Completion Payment",
-      final: "10% Final Payment",
-    };
+  // Open the Razorpay payment modal for a construction project milestone
+  const handlePayMilestone = useCallback(
+    (projectId, milestonePercentage) => {
+      const project = projects.find((p) => String(p._id) === String(projectId));
+      if (!project) return;
+      setPaymentModal({ project, milestonePercentage });
+    },
+    [projects],
+  );
 
-    if (!window.confirm(`Release ${stageLabels[paymentStage]}?`)) {
-      return;
-    }
-
+  const handlePaymentSuccess = useCallback(async () => {
+    setPaymentModal(null);
     try {
-      const res = await axios.post(
-        "/api/customer/pay-milestone",
-        { projectId, milestonePercentage, paymentStage },
-        { withCredentials: true },
-      );
-
-      if (res.data.success) {
-        alert(
-          res.data.message ||
-            `${stageLabels[paymentStage]} released successfully`,
-        );
-        const projectsRes = await axios.get("/api/ongoing_projects", {
-          withCredentials: true,
-        });
-        setProjects(projectsRes.data.projects || []);
-      }
+      const res = await axios.get("/api/ongoing_projects", { withCredentials: true });
+      setProjects(res.data.projects || []);
     } catch (err) {
-      console.error("Error releasing milestone payment:", err);
-      alert(err.response?.data?.error || "Failed to release payment");
+      console.error("Failed to refresh projects after payment:", err);
     }
-  };
+  }, []);
 
   const handleRequestRevision = async (projectId, milestonePercentage) => {
     const feedback = revisionFeedback[`${projectId}_${milestonePercentage}`];
@@ -1378,6 +1368,26 @@ const CustomerOngoing = () => {
                                 },
                             );
 
+                            const payoutByMilestone = new Map(
+                              ((project.paymentDetails && project.paymentDetails.payouts) || []).map((entry) => [
+                                Number(entry.milestonePercentage),
+                                entry,
+                              ]),
+                            );
+
+                            const isMilestoneFullyPaid = (percentage) => {
+                              const payout = payoutByMilestone.get(Number(percentage));
+                              if (!payout) return false;
+                              return (
+                                payout.status === "released" &&
+                                Number(payout.customerPaidAmount || 0) >= Number(payout.amount || 0) - CURRENCY_EPSILON
+                              );
+                            };
+
+                            const unlockedPaymentMilestone = checkpoints.find(
+                              (percentage) => !isMilestoneFullyPaid(percentage),
+                            );
+
                             const nextPendingMilestone = displayMilestones
                               .filter(
                                 (m) =>
@@ -1978,24 +1988,37 @@ const CustomerOngoing = () => {
                                         );
                                       if (!schedule) return null;
 
-                                      const isFinal = Object.values(
-                                        schedule,
-                                      ).some(
-                                        (s) =>
-                                          s.status !== "not_applicable" &&
-                                          s.amount === 0,
-                                      );
                                       const upfrontPaid =
                                         schedule.upfront.status ===
                                           "released" ||
                                         schedule.upfront.status === "paid";
+                                      const isCurrentPaymentMilestone =
+                                        Number(milestone.percentage) === Number(unlockedPaymentMilestone);
+                                      const isFullyPaidMilestone = isMilestoneFullyPaid(milestone.percentage);
+                                      const shouldLockPayment = !isCurrentPaymentMilestone && !isFullyPaidMilestone;
+                                      const waitingForApprovalAfterUpfront =
+                                        isCurrentPaymentMilestone &&
+                                        upfrontPaid &&
+                                        !milestone.isApprovedByCustomer &&
+                                        !milestone.isPlaceholder;
 
                                       return (
                                         <>
-                                          {/* Work Phases: 40% upfront + 60% completion */}
-                                          {!isFinal && (
-                                            <>
-                                              {/* STEP 1: Upfront Payment - Always show first if not paid */}
+                                          {shouldLockPayment ? (
+                                            <div
+                                              style={{
+                                                padding: "10px",
+                                                borderRadius: "6px",
+                                                backgroundColor: "#f8fafc",
+                                                color: "#334155",
+                                                border: "1px solid #cbd5e1",
+                                              }}
+                                            >
+                                              Payment for this phase will open after previous phase payment is fully completed.
+                                            </div>
+                                          ) : (
+                                          <>
+                                              {/* STEP 1: Full phase payment triggers 75% release */}
                                               {!upfrontPaid && (
                                                 <div
                                                   style={{
@@ -2012,8 +2035,7 @@ const CustomerOngoing = () => {
                                                     }}
                                                   >
                                                     <span>
-                                                      40% Upfront (Before Work
-                                                      Start)
+                                                      Full Phase Payment (75% releases immediately)
                                                     </span>
                                                     <span
                                                       style={{
@@ -2045,17 +2067,16 @@ const CustomerOngoing = () => {
                                                         handlePayMilestone(
                                                           project._id,
                                                           milestone.percentage,
-                                                          "upfront",
                                                         )
                                                       }
                                                     >
-                                                      Pay 40% Upfront to Start
+                                                      Pay for This Phase
                                                     </button>
                                                   )}
                                                 </div>
                                               )}
 
-                                              {/* Show upfront status if paid */}
+                                              {/* Show initial release status if paid */}
                                               {upfrontPaid && (
                                                 <div
                                                   style={{
@@ -2074,7 +2095,7 @@ const CustomerOngoing = () => {
                                                     }}
                                                   >
                                                     <span>
-                                                      40% Upfront Payment
+                                                      75% Released to Company
                                                     </span>
                                                     <span
                                                       style={{
@@ -2095,12 +2116,29 @@ const CustomerOngoing = () => {
                                                       marginTop: "5px",
                                                     }}
                                                   >
-                                                    Paid
+                                                    Paid and released
                                                   </div>
                                                 </div>
                                               )}
 
-                                              {/* STEP 2: Completion Payment - Only show after milestone approved AND upfront paid */}
+                                              {waitingForApprovalAfterUpfront && (
+                                                <div
+                                                  style={{
+                                                    marginBottom: "10px",
+                                                    padding: "10px",
+                                                    backgroundColor: "#f8fafc",
+                                                    borderRadius: "6px",
+                                                    border: "1px solid #cbd5e1",
+                                                    color: "#334155",
+                                                    fontSize: "13px",
+                                                    fontWeight: 500,
+                                                  }}
+                                                >
+                                                  Payment section is locked. Final 25% will be enabled after company completion request and your approval.
+                                                </div>
+                                              )}
+
+                                              {/* STEP 2: Release held 25% after approval */}
                                               {milestone.isApprovedByCustomer &&
                                                 upfrontPaid &&
                                                 !milestone.isPlaceholder && (
@@ -2122,8 +2160,7 @@ const CustomerOngoing = () => {
                                                       }}
                                                     >
                                                       <span>
-                                                        60% Completion (After
-                                                        Approval)
+                                                        25% Held Amount (After Approval)
                                                       </span>
                                                       <span
                                                         style={{
@@ -2156,11 +2193,10 @@ const CustomerOngoing = () => {
                                                           handlePayMilestone(
                                                             project._id,
                                                             milestone.percentage,
-                                                            "completion",
                                                           )
                                                         }
                                                       >
-                                                        Pay Remaining 60%
+                                                        Release Held 25%
                                                       </button>
                                                     )}
                                                     {schedule.completion
@@ -2173,83 +2209,18 @@ const CustomerOngoing = () => {
                                                           fontSize: "14px",
                                                         }}
                                                       >
-                                                        Completion Payment
-                                                        Released
+                                                        Held 25% Released
                                                       </div>
                                                     )}
                                                   </div>
                                                 )}
+                                              {schedule.completion.status === "released" && (
+                                                <div style={{ marginTop: "10px", color: "#7c2d12", fontWeight: 600, fontSize: "13px" }}>
+                                                  Platform manager must collect the company platform fee before the next phase can start.
+                                                </div>
+                                              )}
                                             </>
                                           )}
-
-                                          {/* Final Phase: 10% of total at end */}
-                                          {isFinal &&
-                                            milestone.isApprovedByCustomer && (
-                                              <div>
-                                                <div
-                                                  style={{
-                                                    display: "flex",
-                                                    justifyContent:
-                                                      "space-between",
-                                                    alignItems: "center",
-                                                    marginBottom: "8px",
-                                                  }}
-                                                >
-                                                  <span>
-                                                    Final Payment (10% of Total)
-                                                  </span>
-                                                  <span
-                                                    style={{
-                                                      fontWeight: "600",
-                                                      color: "#d32f2f",
-                                                    }}
-                                                  >
-                                                    {formatCurrency(
-                                                      schedule.completion
-                                                        .amount,
-                                                    )}
-                                                  </span>
-                                                </div>
-                                                {schedule.completion.status ===
-                                                  "pending" && (
-                                                  <button
-                                                    className="co-view-details-btn"
-                                                    style={{
-                                                      backgroundColor:
-                                                        "#d32f2f",
-                                                      color: "white",
-                                                      border: "none",
-                                                      padding: "8px 15px",
-                                                      borderRadius: "4px",
-                                                      cursor: "pointer",
-                                                      fontWeight: "600",
-                                                      width: "100%",
-                                                    }}
-                                                    onClick={() =>
-                                                      handlePayMilestone(
-                                                        project._id,
-                                                        milestone.percentage,
-                                                        "completion",
-                                                      )
-                                                    }
-                                                  >
-                                                    Release Final Payment
-                                                  </button>
-                                                )}
-                                                {schedule.completion.status ===
-                                                  "released" && (
-                                                  <div
-                                                    style={{
-                                                      color: "#2e7d32",
-                                                      fontWeight: "600",
-                                                      fontSize: "14px",
-                                                    }}
-                                                  >
-                                                    Final Payment Released
-                                                  </div>
-                                                )}
-                                              </div>
-                                            )}
                                         </>
                                       );
                                     })()}
@@ -3217,6 +3188,17 @@ const CustomerOngoing = () => {
           {complaintLoading ? "Submitting..." : "Submit Complaint"}
         </button>
       </Modal>
+
+      {/* ── Company project Razorpay payment modal ── */}
+      {paymentModal && (
+        <CompanyPaymentModal
+          isOpen={true}
+          onClose={() => setPaymentModal(null)}
+          onSuccess={handlePaymentSuccess}
+          project={paymentModal.project}
+          milestonePercentage={paymentModal.milestonePercentage}
+        />
+      )}
     </>
   );
 };

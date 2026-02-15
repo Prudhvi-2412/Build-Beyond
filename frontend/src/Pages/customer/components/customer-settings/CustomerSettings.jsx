@@ -16,6 +16,8 @@ const CustomerSettings = () => {
   const [originalEmail, setOriginalEmail] = useState("");
   const [showVerifyEmail, setShowVerifyEmail] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [updatingTwoFactor, setUpdatingTwoFactor] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -34,6 +36,11 @@ const CustomerSettings = () => {
         };
         setProfile(fetchedProfile);
         setOriginalEmail(fetchedProfile.email);
+
+        const twoFactorRes = await axios.get("/api/2fa/status", {
+          withCredentials: true,
+        });
+        setTwoFactorEnabled(Boolean(twoFactorRes?.data?.twoFactorEnabled));
       } catch (err) {
         console.error("Failed to load settings:", err);
       } finally {
@@ -98,6 +105,11 @@ const CustomerSettings = () => {
       return;
     }
 
+    if (currentPassword === newPassword) {
+      alert("New password cannot be same as current password.");
+      return;
+    }
+
     try {
       const res = await axios.post(
         "/api/customer/password/update",
@@ -111,6 +123,24 @@ const CustomerSettings = () => {
         "Error: " +
           (err.response?.data?.message || "Failed to update password.")
       );
+    }
+  };
+
+  const handleTwoFactorToggle = async () => {
+    setUpdatingTwoFactor(true);
+    try {
+      const targetValue = !twoFactorEnabled;
+      const res = await axios.put(
+        "/api/2fa/status",
+        { enabled: targetValue },
+        { withCredentials: true }
+      );
+      setTwoFactorEnabled(targetValue);
+      alert(res.data.message || "Two-factor setting updated");
+    } catch (err) {
+      alert("Failed to update 2FA setting");
+    } finally {
+      setUpdatingTwoFactor(false);
     }
   };
 
@@ -355,6 +385,25 @@ const CustomerSettings = () => {
                   Update Password
                 </button>
                 <hr style={{ margin: "2rem 0" }} />
+
+                <div className="cs-form-group">
+                  <label>Two-Factor Authentication (2FA)</label>
+                  <p style={{ marginBottom: "0.75rem", color: "#666" }}>
+                    When enabled, login requires OTP verification every time.
+                  </p>
+                  <button
+                    type="button"
+                    className="cs-btn cs-btn-secondary"
+                    onClick={handleTwoFactorToggle}
+                    disabled={updatingTwoFactor}
+                  >
+                    {updatingTwoFactor
+                      ? "Updating..."
+                      : twoFactorEnabled
+                      ? "Disable 2FA"
+                      : "Enable 2FA"}
+                  </button>
+                </div>
               </form>
             </div>
 

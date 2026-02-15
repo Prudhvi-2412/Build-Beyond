@@ -34,6 +34,11 @@ const AdminLayout = ({ children }) => {
 
   if (role === "platform_manager") {
     navItems.push({
+      label: "Company Payments",
+      icon: BarChart3,
+      path: `${basePath}/company-payments`,
+    });
+    navItems.push({
       label: "Verification Tasks",
       icon: Building2,
       path: `${basePath}/verification-tasks`,
@@ -61,6 +66,11 @@ const AdminLayout = ({ children }) => {
         label: "Revenue Analytics",
         icon: BarChart3,
         path: `${basePath}/revenue-analytics`,
+      },
+      {
+        label: "Platform Revenue Intelligence",
+        icon: BarChart3,
+        path: `${basePath}/platform-revenue-intelligence`,
       },
     );
   }

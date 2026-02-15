@@ -13,6 +13,7 @@ import AdminWorkerDetail from "./AdminWorkerDetail/AdminWorkerDetail";
 import ArchitectHiringDetail from "./ArchitectHiringDetail/ArchitectHiringDetail";
 import PlatformManagerManagement from "./PlatformManagerManagement/PlatformManagerManagement";
 import AdminSettings from "./AdminSettings/AdminSettings";
+import AdminPlatformRevenueIntelligence from "./AdminPlatformRevenueIntelligence/AdminPlatformRevenueIntelligence";
 
 const Admin = () => {
   return (
@@ -21,6 +22,7 @@ const Admin = () => {
       <Route path="admindashboard" element={<AdminDashboard />} />
       <Route path="data-management" element={<AdminDataManagement />} />
       <Route path="revenue-analytics" element={<AdminRevenueAnalytics />} />
+      <Route path="platform-revenue-intelligence" element={<AdminPlatformRevenueIntelligence />} />
       <Route path="platform-managers" element={<PlatformManagerManagement />} />
       <Route path="settings" element={<AdminSettings />} />
       <Route path="bid/:id" element={<AdminBidDetail />} />

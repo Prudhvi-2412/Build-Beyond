@@ -14,4 +14,8 @@ module.exports = {
   PLATFORM_MANAGER_PASSWORD: process.env.PLATFORM_MANAGER_PASSWORD,
   PLATFORM_MANAGER_PASSKEY: process.env.PLATFORM_MANAGER_PASSKEY,
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
+  REDIS_URL: process.env.REDIS_URL,
+  REDIS_ENABLED: process.env.REDIS_ENABLED || 'true',
+  REDIS_DEFAULT_TTL_SECONDS: Number(process.env.REDIS_DEFAULT_TTL_SECONDS || 120),
+  REDIS_CACHE_LOG_EVERY_N: Number(process.env.REDIS_CACHE_LOG_EVERY_N || 0),
 };

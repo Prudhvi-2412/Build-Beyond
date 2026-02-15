@@ -89,6 +89,13 @@ const {
   CompanytoWorker,
   Transaction,
 } = require("../models");
+const {
+  buildCacheKey,
+  getCacheJson,
+  setCacheJson,
+  getRedisCacheStats,
+  resetRedisCacheStats,
+} = require('../utils/redisCache');
 
 const getAdminDashboard = async (req, res) => {
   try {
@@ -1355,7 +1362,12 @@ const getWorkerFullDetail = async (req, res) => {
             totalCommissionTransactions: {
               $sum: {
                 $cond: [
-                  { $eq: ["$transactionType", "platform_commission"] },
+                  {
+                    $or: [
+                      { $eq: ["$transactionType", "platform_commission"] },
+                      { $eq: ["$transactionType", "platform_fee_collection"] },
+                    ],
+                  },
                   { $ifNull: ["$amount", 0] },
                   0,
                 ],
@@ -2327,11 +2339,17 @@ const getAdminRevenue = async (req, res) => {
     // Populate construction projects
     constructionProjects.forEach(cp => {
       const tA = cp.paymentDetails?.totalAmount || cp.proposal?.price || 0;
-      const pc = cp.paymentDetails?.platformCommission || (tA * 0.1);
+      const payouts = Array.isArray(cp.paymentDetails?.payouts) ? cp.paymentDetails.payouts : [];
+      const pc = payouts.reduce((sum, payout) => sum + Number(payout.platformFee || 0), 0);
       const prx = transactionsByProject[cp._id.toString()] || [];
 
-      let rec = 0; let pend = pc;
-      if (cp.status === 'completed') { rec = pc; pend = 0; revenueByType.construction.completedProjects++; metrics.completedProjects++; }
+      let rec = payouts
+        .filter((payout) => payout.platformFeeStatus === 'collected')
+        .reduce((sum, payout) => sum + Number(payout.platformFee || 0), 0);
+      let pend = payouts
+        .filter((payout) => payout.platformFeeStatus === 'pending')
+        .reduce((sum, payout) => sum + Number(payout.platformFee || 0), 0);
+      if (cp.status === 'completed') { revenueByType.construction.completedProjects++; metrics.completedProjects++; }
       else if (cp.status === 'ongoing' || cp.status === 'accepted') { revenueByType.construction.activeProjects++; metrics.activeProjects++; }
       
       revenueByType.construction.totalProjects++;
@@ -2357,18 +2375,17 @@ const getAdminRevenue = async (req, res) => {
       }
 
       // Extract phase analytics
-      if (cp.paymentDetails && cp.paymentDetails.phases) {
-         cp.paymentDetails.phases.forEach((p, idx) => {
-            const key = idx < 4 ? `phase${idx+1}` : 'final';
-            const pf = p.platformFee || 0;
-            phaseAnalytics[key].total += pf;
-            if (p.paymentStatus === 'completed' || p.paymentStatus === 'paid') {
-               phaseAnalytics[key].received += pf;
-            } else {
-               phaseAnalytics[key].pending += pf;
-            }
-         });
-      }
+      payouts.forEach((payout, idx) => {
+        const key = idx < 4 ? `phase${idx + 1}` : null;
+        if (!key || !phaseAnalytics[key]) return;
+        const pf = Number(payout.platformFee || 0);
+        phaseAnalytics[key].total += pf;
+        if (payout.platformFeeStatus === 'collected') {
+         phaseAnalytics[key].received += pf;
+        } else if (payout.platformFeeStatus === 'pending') {
+         phaseAnalytics[key].pending += pf;
+        }
+      });
 
       projectsList.push({
         _id: cp._id,
@@ -2500,7 +2517,7 @@ const getAdminRevenue = async (req, res) => {
        
        if (!monthlyMap[mId]) monthlyMap[mId] = { month: mName, ts: d.getTime(), revenue: 0, pending: 0 };
        
-       const rev = (t.transactionType === 'platform_commission' || t.transactionType === 'subscription_fee') 
+         const rev = (t.transactionType === 'platform_commission' || t.transactionType === 'platform_fee_collection' || t.transactionType === 'subscription_fee') 
            ? (t.amount || t.netAmount || 0) : (t.platformFee || 0);
 
        if (rev > 0) {
@@ -2547,6 +2564,382 @@ const getAdminRevenue = async (req, res) => {
   }
 };
 
+const getPlatformRevenueIntelligence = async (req, res) => {
+  try {
+    const {
+      timeframe = 'all',
+      startDate,
+      endDate,
+      projectType = 'all',
+      feeStatus = 'all',
+      search = '',
+      page = 1,
+      limit = 20,
+    } = req.query;
+
+    const cacheKey = buildCacheKey('admin:platform-revenue-intelligence:v1', {
+      timeframe,
+      startDate,
+      endDate,
+      projectType,
+      feeStatus,
+      search,
+      page,
+      limit,
+    });
+
+    const cachedPayload = await getCacheJson(cacheKey);
+    if (cachedPayload) {
+      return res.json(cachedPayload);
+    }
+
+    const now = new Date();
+    let dateFilter = {};
+    if (startDate || endDate) {
+      dateFilter.createdAt = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        if (!Number.isNaN(start.getTime())) dateFilter.createdAt.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        if (!Number.isNaN(end.getTime())) {
+          end.setHours(23, 59, 59, 999);
+          dateFilter.createdAt.$lte = end;
+        }
+      }
+      if (Object.keys(dateFilter.createdAt).length === 0) delete dateFilter.createdAt;
+    } else if (timeframe !== 'all') {
+      const start = new Date();
+      if (timeframe === 'week') start.setDate(now.getDate() - 7);
+      else if (timeframe === 'month') start.setMonth(now.getMonth() - 1);
+      else if (timeframe === 'quarter') start.setMonth(now.getMonth() - 3);
+      else if (timeframe === 'year') start.setFullYear(now.getFullYear() - 1);
+      dateFilter = { createdAt: { $gte: start } };
+    }
+
+    const [constructionProjects, architectProjects, interiorProjects, transactions] = await Promise.all([
+      ConstructionProjectSchema.find(dateFilter)
+        .populate('customerId', 'name email phone')
+        .populate('companyId', 'companyName contactPerson email')
+        .lean(),
+      ArchitectHiring.find(dateFilter)
+        .populate('customer', 'name email phone')
+        .populate('worker', 'name email specialization')
+        .lean(),
+      DesignRequest.find(dateFilter)
+        .populate('customerId', 'name email phone')
+        .populate('workerId', 'name email specialization')
+        .lean(),
+      Transaction.find({ ...dateFilter, status: { $ne: 'failed' } })
+        .sort({ createdAt: -1 })
+        .lean(),
+    ]);
+
+    const projectRows = [];
+
+    const pushProjectRow = (row) => {
+      projectRows.push(row);
+    };
+
+    constructionProjects.forEach((project) => {
+      const payouts = Array.isArray(project?.paymentDetails?.payouts) ? project.paymentDetails.payouts : [];
+      const totalFee = payouts.reduce((sum, p) => sum + Number(p.platformFee || 0), 0);
+      const collected = payouts
+        .filter((p) => p.platformFeeStatus === 'collected')
+        .reduce((sum, p) => sum + Number(p.platformFee || 0), 0);
+      const pending = payouts
+        .filter((p) => p.platformFeeStatus === 'pending')
+        .reduce((sum, p) => sum + Number(p.platformFee || 0), 0);
+      const yetToCome = payouts
+        .filter((p) => (p.platformFeeStatus || 'not_due') === 'not_due')
+        .reduce((sum, p) => sum + Number(p.platformFee || 0), 0);
+
+      pushProjectRow({
+        projectId: project._id,
+        projectType: 'construction',
+        projectName: project.projectName || 'Construction Project',
+        fromParty: project.companyId?.companyName || 'Company',
+        fromPartyType: 'company',
+        toParty: 'Platform',
+        customerName: project.customerId?.name || 'Customer',
+        totalFee,
+        collected,
+        pending,
+        yetToCome,
+        status: project.status,
+        feeTimeline: payouts.map((payout, index) => ({
+          label: payout.phaseName || `Phase ${index + 1}`,
+          milestonePercentage: Number(payout.milestonePercentage || (index + 1) * 25),
+          platformFee: Number(payout.platformFee || 0),
+          feeStatus: payout.platformFeeStatus || 'not_due',
+          collectedAt: payout.platformFeeCollectedAt || null,
+          invoiceUrl: payout.platformFeeInvoiceUrl || null,
+        })),
+      });
+    });
+
+    const workerProjectRowsBuilder = (project, type) => {
+      const milestones = Array.isArray(project?.paymentDetails?.milestonePayments)
+        ? project.paymentDetails.milestonePayments
+        : [];
+      const totalFee = milestones.reduce((sum, m) => sum + Number(m.platformFee || 0), 0);
+      const collected = milestones
+        .filter((m) => (m.platformFeeStatus || 'not_due') === 'collected')
+        .reduce((sum, m) => sum + Number(m.platformFee || 0), 0);
+      const pending = milestones
+        .filter((m) => (m.platformFeeStatus || 'not_due') === 'pending')
+        .reduce((sum, m) => sum + Number(m.platformFee || 0), 0);
+      const yetToCome = milestones
+        .filter((m) => (m.platformFeeStatus || 'not_due') === 'not_due')
+        .reduce((sum, m) => sum + Number(m.platformFee || 0), 0);
+
+      pushProjectRow({
+        projectId: project._id,
+        projectType: type,
+        projectName: project.projectName || (type === 'architect' ? 'Architect Project' : 'Interior Project'),
+        fromParty: (type === 'architect' ? project.worker?.name : project.workerId?.name) || 'Worker',
+        fromPartyType: 'worker',
+        toParty: 'Platform',
+        customerName: (type === 'architect' ? project.customer?.name : project.customerId?.name) || 'Customer',
+        totalFee,
+        collected,
+        pending,
+        yetToCome,
+        status: project.status,
+        feeTimeline: milestones.map((milestone, index) => ({
+          label: `${Number(milestone.percentage || (index + 1) * 25)}% Milestone`,
+          milestonePercentage: Number(milestone.percentage || (index + 1) * 25),
+          platformFee: Number(milestone.platformFee || 0),
+          feeStatus: milestone.platformFeeStatus || 'not_due',
+          collectedAt: milestone.platformFeeCollectedAt || null,
+          invoiceUrl: null,
+        })),
+      });
+    };
+
+    architectProjects.forEach((project) => workerProjectRowsBuilder(project, 'architect'));
+    interiorProjects.forEach((project) => workerProjectRowsBuilder(project, 'interior'));
+
+    let filteredProjects = projectRows;
+    if (projectType !== 'all') {
+      filteredProjects = filteredProjects.filter((row) => row.projectType === projectType);
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      filteredProjects = filteredProjects.filter((row) =>
+        String(row.projectName || '').toLowerCase().includes(q)
+        || String(row.fromParty || '').toLowerCase().includes(q)
+        || String(row.customerName || '').toLowerCase().includes(q),
+      );
+    }
+
+    const getLifecycleStatus = (row) => {
+      if (row.pending > 0) return 'pending';
+      if (row.yetToCome > 0) return 'yet_to_come';
+      if (row.collected > 0) return 'collected';
+      return 'none';
+    };
+
+    if (feeStatus !== 'all') {
+      filteredProjects = filteredProjects.filter((row) => getLifecycleStatus(row) === feeStatus);
+    }
+
+    const statusBreakdown = {
+      collected: filteredProjects.reduce((sum, row) => sum + Number(row.collected || 0), 0),
+      pending: filteredProjects.reduce((sum, row) => sum + Number(row.pending || 0), 0),
+      yetToCome: filteredProjects.reduce((sum, row) => sum + Number(row.yetToCome || 0), 0),
+    };
+
+    const typeBreakdownMap = {
+      construction: { collected: 0, pending: 0, yetToCome: 0 },
+      architect: { collected: 0, pending: 0, yetToCome: 0 },
+      interior: { collected: 0, pending: 0, yetToCome: 0 },
+    };
+    filteredProjects.forEach((row) => {
+      if (!typeBreakdownMap[row.projectType]) return;
+      typeBreakdownMap[row.projectType].collected += Number(row.collected || 0);
+      typeBreakdownMap[row.projectType].pending += Number(row.pending || 0);
+      typeBreakdownMap[row.projectType].yetToCome += Number(row.yetToCome || 0);
+    });
+
+    const invoiceMap = {};
+    constructionProjects.forEach((project) => {
+      (project.paymentDetails?.payouts || []).forEach((payout) => {
+        const key = `${project._id}_${Number(payout.milestonePercentage || 0)}`;
+        invoiceMap[key] = payout.platformFeeInvoiceUrl || null;
+      });
+    });
+
+    const relatedTransactions = transactions.filter((transaction) => {
+      const txType = transaction.transactionType;
+      const allowed = [
+        'platform_fee_due',
+        'platform_fee_collection',
+        'platform_commission',
+        'escrow_hold',
+        'milestone_release',
+      ].includes(txType);
+      if (!allowed) return false;
+      if (projectType !== 'all' && transaction.projectType !== projectType) return false;
+      return true;
+    });
+
+    const monthlyMap = {};
+    relatedTransactions.forEach((transaction) => {
+      const dt = new Date(transaction.createdAt);
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthlyMap[key]) {
+        monthlyMap[key] = {
+          month: dt.toLocaleString('default', { month: 'short', year: 'numeric' }),
+          ts: dt.getTime(),
+          collected: 0,
+          pending: 0,
+        };
+      }
+      const amount = Number(transaction.platformFee || transaction.amount || 0);
+      if (transaction.transactionType === 'platform_fee_collection' || transaction.transactionType === 'platform_commission') {
+        monthlyMap[key].collected += amount;
+      } else if (transaction.transactionType === 'platform_fee_due') {
+        monthlyMap[key].pending += amount;
+      }
+    });
+
+    const detailedTransactions = relatedTransactions.map((transaction) => {
+      const txProjectType = transaction.projectType || 'unknown';
+      const txMilestone = Number(transaction.milestonePercentage || 0);
+      const invoiceKey = `${transaction.projectId}_${txMilestone}`;
+      const feeStatusValue =
+        transaction.transactionType === 'platform_fee_collection' || transaction.transactionType === 'platform_commission'
+          ? 'collected'
+          : transaction.transactionType === 'platform_fee_due'
+            ? 'pending'
+            : 'flow';
+
+      return {
+        _id: transaction._id,
+        createdAt: transaction.createdAt,
+        projectId: transaction.projectId,
+        projectType: txProjectType,
+        milestonePercentage: txMilestone || null,
+        transactionType: transaction.transactionType,
+        amount: Number(transaction.amount || 0),
+        platformFee: Number(transaction.platformFee || 0),
+        netAmount: Number(transaction.netAmount || 0),
+        status: transaction.status,
+        paymentMethod: transaction.paymentMethod || 'na',
+        description: transaction.description || '',
+        fromPartyType: transaction.companyId ? 'company' : transaction.workerId ? 'worker' : transaction.customerId ? 'customer' : 'system',
+        toPartyType: 'platform',
+        feeStatus: feeStatusValue,
+        invoiceUrl: txProjectType === 'construction' ? invoiceMap[invoiceKey] || null : null,
+        razorpayOrderId: transaction.razorpayOrderId || null,
+        razorpayPaymentId: transaction.razorpayPaymentId || null,
+      };
+    });
+
+    const offset = (Number(page) - 1) * Number(limit);
+    const paginatedTransactions = detailedTransactions.slice(offset, offset + Number(limit));
+
+    const responsePayload = {
+      success: true,
+      filters: {
+        timeframe,
+        startDate: startDate || null,
+        endDate: endDate || null,
+        projectType,
+        feeStatus,
+        search,
+        page: Number(page),
+        limit: Number(limit),
+      },
+      metrics: {
+        totalCollected: statusBreakdown.collected,
+        totalPending: statusBreakdown.pending,
+        totalYetToCome: statusBreakdown.yetToCome,
+        totalExpected: statusBreakdown.collected + statusBreakdown.pending + statusBreakdown.yetToCome,
+        activeFeeProjects: filteredProjects.filter((row) => row.pending > 0 || row.yetToCome > 0).length,
+        totalTrackedProjects: filteredProjects.length,
+        collectionRate: (statusBreakdown.collected + statusBreakdown.pending + statusBreakdown.yetToCome) > 0
+          ? Math.round((statusBreakdown.collected / (statusBreakdown.collected + statusBreakdown.pending + statusBreakdown.yetToCome)) * 100)
+          : 0,
+      },
+      charts: {
+        monthlyFeeFlow: Object.values(monthlyMap)
+          .sort((a, b) => a.ts - b.ts)
+          .map((m) => ({ month: m.month, collected: m.collected, pending: m.pending })),
+        feeStatusDistribution: [
+          { name: 'Collected', value: statusBreakdown.collected },
+          { name: 'Pending', value: statusBreakdown.pending },
+          { name: 'Yet To Come', value: statusBreakdown.yetToCome },
+        ],
+        feeByProjectType: [
+          {
+            type: 'Construction',
+            collected: typeBreakdownMap.construction.collected,
+            pending: typeBreakdownMap.construction.pending,
+            yetToCome: typeBreakdownMap.construction.yetToCome,
+          },
+          {
+            type: 'Architect',
+            collected: typeBreakdownMap.architect.collected,
+            pending: typeBreakdownMap.architect.pending,
+            yetToCome: typeBreakdownMap.architect.yetToCome,
+          },
+          {
+            type: 'Interior',
+            collected: typeBreakdownMap.interior.collected,
+            pending: typeBreakdownMap.interior.pending,
+            yetToCome: typeBreakdownMap.interior.yetToCome,
+          },
+        ],
+      },
+      projects: filteredProjects,
+      transactions: {
+        total: detailedTransactions.length,
+        page: Number(page),
+        limit: Number(limit),
+        items: paginatedTransactions,
+      },
+    };
+
+    await setCacheJson(cacheKey, responsePayload, 180);
+
+    res.json(responsePayload);
+  } catch (error) {
+    console.error('Platform revenue intelligence error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+const getRedisCacheStatsAdmin = async (_req, res) => {
+  try {
+    const stats = getRedisCacheStats();
+    res.json({ success: true, stats });
+  } catch (error) {
+    console.error('Get Redis cache stats error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+const resetRedisCacheStatsAdmin = async (_req, res) => {
+  try {
+    const before = getRedisCacheStats();
+    resetRedisCacheStats();
+    const after = getRedisCacheStats();
+
+    res.json({
+      success: true,
+      message: 'Redis cache stats reset successfully',
+      before,
+      after,
+    });
+  } catch (error) {
+    console.error('Reset Redis cache stats error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   getAdminDashboard,
   deleteCustomer,
@@ -2576,4 +2969,7 @@ module.exports = {
   verifyWorker,
   rejectWorker,
   getAdminRevenue,
+  getPlatformRevenueIntelligence,
+  getRedisCacheStatsAdmin,
+  resetRedisCacheStatsAdmin,
 };

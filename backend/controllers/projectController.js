@@ -358,6 +358,20 @@ const updateProject = async (req, res) => {
       // Find next checkpoint that needs approval
       const nextCheckpoint = checkpoints.find(c => c > lastApprovedCheckpoint) || 100;
 
+      const previousCheckpoints = checkpoints.filter((checkpoint) => checkpoint < milestonePercent);
+      const blockedCheckpoint = previousCheckpoints.find((checkpoint) => {
+        const payout = (project.paymentDetails?.payouts || []).find(
+          (entry) => Number(entry.milestonePercentage) === Number(checkpoint),
+        );
+        return payout && payout.status === 'released' && payout.platformFeeStatus === 'pending';
+      });
+
+      if (blockedCheckpoint) {
+        return res.status(400).json({
+          message: `Cannot proceed beyond ${blockedCheckpoint}%. The platform fee for that phase is still pending collection.`,
+        });
+      }
+
       // Check if trying to cross a checkpoint without approval
       if (milestonePercent > nextCheckpoint) {
         const pendingCheckpoint = project.milestones.find(
@@ -735,10 +749,35 @@ const approveMilestone = async (req, res) => {
 
     await project.save();
 
+    let paymentReleaseInfo = null;
+    try {
+      const { releaseCompanyMilestonePayment } = require('./paymentController');
+      paymentReleaseInfo = await new Promise((resolve, reject) => {
+        const mockReq = {
+          body: {
+            projectId,
+            milestonePercentage: Number(milestonePercentage),
+          },
+        };
+
+        const mockRes = {
+          json: (data) => resolve(data),
+          status: () => ({
+            json: (data) => reject(data),
+          }),
+        };
+
+        releaseCompanyMilestonePayment(mockReq, mockRes).catch(reject);
+      });
+    } catch (paymentError) {
+      console.error('Error releasing company milestone payment:', paymentError);
+    }
+
     res.status(200).json({ 
       success: true, 
-      message: `Milestone ${milestonePercentage}% approved successfully`,
-      milestone 
+      message: paymentReleaseInfo?.message || `Milestone ${milestonePercentage}% approved successfully`,
+      milestone,
+      paymentInfo: paymentReleaseInfo?.data || null,
     });
   } catch (error) {
     console.error("Error approving milestone:", error);

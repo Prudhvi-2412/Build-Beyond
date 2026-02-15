@@ -4,6 +4,8 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import './PaymentCheckout.css';
 
+const PLATFORM_FEE_COMMISSION = 5;
+
 const PaymentCheckout = () => {
   const { projectId } = useParams();
   const [searchParams] = useSearchParams();
@@ -17,6 +19,16 @@ const PaymentCheckout = () => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState(null);
+
+  // Load Razorpay script
+  useEffect(() => {
+    if (document.getElementById('razorpay-script')) return;
+    const script = document.createElement('script');
+    script.id = 'razorpay-script';
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
 
   useEffect(() => {
     fetchProjectDetails();
@@ -57,40 +69,36 @@ const PaymentCheckout = () => {
     if (paymentType === 'deposit') {
       // Initial 25% deposit
       const depositAmount = (finalAmount * 25) / 100;
-      const immediateToWorker = (finalAmount * 15) / 100; // 15% released immediately
-      const heldForMilestone = (finalAmount * 10) / 100; // 10% held for first milestone
+      const platformFee = (depositAmount * PLATFORM_FEE_COMMISSION) / 100;
+      const workerAmount = depositAmount - platformFee;
+      const immediateToWorker = workerAmount * 0.6; // 60% of worker portion released immediately
+      const heldForMilestone = workerAmount * 0.4; // 40% held for first milestone
       
       return {
         title: 'Initial Deposit Payment',
         subtitle: 'Pay 25% to start your project',
         amount: depositAmount,
         percentage: 25,
-        description: 'Worker receives 15% immediately to start work. Remaining 10% released when first milestone is approved.',
+        description: 'Worker receives a portion immediately to start work. Remaining held for milestone approval.',
         breakdown: [
           { label: 'Total Project Cost', value: finalAmount },
           { label: 'Deposit Required (25%)', value: depositAmount, highlight: true },
-          { label: '→ Released to Worker Immediately (15%)', value: immediateToWorker, info: true },
-          { label: '→ Held for First Milestone (10%)', value: heldForMilestone, info: true },
+          { label: 'Platform Fee (' + PLATFORM_FEE_COMMISSION + '%)', value: platformFee, info: true },
+          { label: 'Worker Receives', value: workerAmount, info: true },
           { label: 'Remaining Amount', value: finalAmount - depositAmount, muted: true }
         ]
       };
     } else if (paymentType === 'milestone') {
       // Milestone payment
       const milestonePerc = parseFloat(milestonePercentage);
-      const milestoneAmount = (finalAmount * milestonePerc) / 100;
+      const milestoneAmount = finalAmount / 4;
+      const platformFee = (milestoneAmount * PLATFORM_FEE_COMMISSION) / 100;
+      const workerAmount = milestoneAmount - platformFee;
       
-      // Calculate already paid: 25% deposit + all previous milestones
-      // For 50% milestone: already paid = 25%
-      // For 75% milestone: already paid = 25% + 25% (50% milestone)
-      // For 100% milestone: already paid = 25% + 25% + 25% (50% + 75% milestones)
-      let alreadyPaidPercentage = 25; // Initial deposit
-      if (milestonePerc === 75) {
-        alreadyPaidPercentage = 25 + 25; // Deposit + 50% milestone
-      } else if (milestonePerc === 100) {
-        alreadyPaidPercentage = 25 + 25 + 25; // Deposit + 50% + 75% milestones
-      }
-      
-      const alreadyPaid = (finalAmount * alreadyPaidPercentage) / 100;
+      const milestoneOrder = [25, 50, 75, 100];
+      const milestoneIndex = Math.max(0, milestoneOrder.indexOf(milestonePerc));
+      const alreadyPaid = (finalAmount / 4) * milestoneIndex;
+      const alreadyPaidPercentage = milestoneIndex * 25;
       const remainingAfterThis = finalAmount - alreadyPaid - milestoneAmount;
       
       return {
@@ -103,6 +111,8 @@ const PaymentCheckout = () => {
           { label: 'Total Project Cost', value: finalAmount },
           { label: `Already Paid (${alreadyPaidPercentage}%)`, value: alreadyPaid, muted: true },
           { label: `This Payment (${milestonePerc}% milestone)`, value: milestoneAmount, highlight: true },
+          { label: 'Platform Fee (' + PLATFORM_FEE_COMMISSION + '%)', value: platformFee, info: true },
+          { label: 'Worker Receives', value: workerAmount, info: true },
           { label: 'Remaining After This', value: remainingAfterThis, muted: true }
         ]
       };
@@ -111,36 +121,69 @@ const PaymentCheckout = () => {
     return null;
   };
 
+  const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
+
   const handleConfirmPayment = async () => {
     setProcessing(true);
     setError(null);
 
     try {
-      // Call backend to initialize payment/escrow
-      const endpoint = paymentType === 'deposit'
-        ? '/api/payment/initialize-escrow'
-        : '/api/payment/collect-milestone';
+      const milestoneValue = paymentType === 'deposit' ? 25 : Number(milestonePercentage);
 
-      const payload = {
+      const orderPayload = {
         projectId,
         projectType,
-        ...(paymentType === 'milestone' && { milestonePercentage: parseFloat(milestonePercentage) })
+        paymentType,
+        ...(paymentType === 'milestone' && { milestonePercentage: milestoneValue }),
       };
 
-      const res = await axios.post(endpoint, payload, { withCredentials: true });
+      const orderRes = await axios.post('/api/payment/worker/create-order', orderPayload, { withCredentials: true });
+      const { razorpayOrderId, amountInPaise, currency, keyId } = orderRes.data.data;
 
-      if (res.data.success) {
-        // Payment gateway integration will go here
-        // For now, simulate successful payment
-        setTimeout(() => {
-          navigate('/customerdashboard/ongoing_projects', {
-            state: { 
-              message: 'Payment successful! Your project is now active.',
-              type: 'success'
+      const rzp = new window.Razorpay({
+        key: keyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount: amountInPaise,
+        currency: currency || 'INR',
+        name: 'Build & Beyond',
+        description: paymentType === 'deposit' ? 'Initial Deposit Payment' : `${milestoneValue}% Milestone Payment`,
+        order_id: razorpayOrderId,
+        handler: async (response) => {
+          try {
+            const verifyPayload = {
+              projectId,
+              projectType,
+              paymentType,
+              milestonePercentage: milestoneValue,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            };
+
+            const verifyRes = await axios.post('/api/payment/worker/verify-payment', verifyPayload, { withCredentials: true });
+            if (!verifyRes.data?.success) {
+              throw new Error(verifyRes.data?.message || 'Payment verification failed');
             }
-          });
-        }, 1500);
-      }
+
+            navigate('/customerdashboard/ongoing_projects', {
+              state: {
+                message: 'Payment successful! Funds are held in escrow for this milestone.',
+                type: 'success',
+              },
+            });
+          } catch (verifyErr) {
+            setProcessing(false);
+            setError(verifyErr.response?.data?.message || verifyErr.message || 'Payment verification failed');
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setProcessing(false);
+          },
+        },
+        theme: { color: '#2563eb' },
+      });
+
+      rzp.open();
     } catch (err) {
       setError(err.response?.data?.message || 'Payment processing failed');
       setProcessing(false);
@@ -312,8 +355,7 @@ const PaymentCheckout = () => {
           {/* Payment Gateway Note */}
           <div className="copck-gateway-note">
             <p>
-              <strong>Note:</strong> Payment gateway integration (Razorpay/PayU/Stripe) will be activated soon.
-              Currently processing payments in test mode.
+              <strong>Note:</strong> Payments are processed securely via Razorpay and held in escrow based on milestone rules.
             </p>
           </div>
         </div>

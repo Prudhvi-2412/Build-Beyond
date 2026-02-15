@@ -1,12 +1,10 @@
 // src/pages/company/components/company-project-requests/components/ProposalModal.jsx
 import React, { useState } from 'react';
 
-// 5 phases: 4 work phases (25% each) + 1 final touching (10%)
-// Total = 110% (100% work + 10% final finishes)
+// 4 phases: each phase is fixed at 25% of the project value.
 const WORK_PHASES_COUNT = 4;
 const WORK_PHASE_PERCENTAGE = 25;
-const FINAL_PHASE_PERCENTAGE = 10;
-const TOTAL_PERCENTAGE = 110; // 100% + 10% final
+const TOTAL_PERCENTAGE = 100;
 
 const ProposalModal = ({ 
   isOpen, 
@@ -54,20 +52,10 @@ const ProposalModal = ({
       name: 'Phase 4',
       percentage: WORK_PHASE_PERCENTAGE,
       requiredMonths: '',
-      amount: '', // Editable
+      amount: '',
       isFixed: true,
       isFinal: false,
       subdivisions: [{ id: 1, category: '', description: '', amount: '' }]
-    },
-    {
-      id: 5,
-      name: 'Final Touching',
-      percentage: FINAL_PHASE_PERCENTAGE,
-      requiredMonths: '0.5',
-      amount: '', // Editable
-      isFixed: true,
-      isFinal: true,
-      subdivisions: [{ id: 1, category: 'Final Touches', description: '', amount: '' }]
     }
   ]);
   const [phaseErrors, setPhaseErrors] = useState({});
@@ -128,17 +116,11 @@ const ProposalModal = ({
   };
 
   const getTotalAmount = () => {
-    // Total = work phases only (final phase is part of this, not additional)
-    return getWorkPhasesTotalAmount();
+    return phases.reduce((sum, phase) => sum + (parseFloat(getPhaseAmount(phase)) || 0), 0);
   };
 
   const getWorkPhasesTotalAmount = () => {
-    return phases.slice(0, 4).reduce((sum, phase) => sum + (parseFloat(getPhaseAmount(phase)) || 0), 0);
-  };
-
-  const getFinalPhaseAmount = () => {
-    const workTotal = getWorkPhasesTotalAmount();
-    return workTotal > 0 ? (workTotal * 0.10) : 0;
+    return phases.reduce((sum, phase) => sum + (parseFloat(getPhaseAmount(phase)) || 0), 0);
   };
 
   // Calculate phase amount from subdivisions if they have amounts
@@ -154,8 +136,8 @@ const ProposalModal = ({
     const errors = {};
     const totalPercentage = getTotalPercentage();
 
-    if (phases.length !== 5) {
-      errors.phaseCount = 'Exactly 5 phases are required.';
+    if (phases.length !== 4) {
+      errors.phaseCount = 'Exactly 4 phases are required.';
     }
 
     phases.forEach((phase, index) => {
@@ -164,24 +146,16 @@ const ProposalModal = ({
       }
 
       // Validate percentage
-      if (phase.isFinal) {
-        if (parseFloat(phase.percentage) !== FINAL_PHASE_PERCENTAGE) {
-          errors[`phase_${phase.id}_percentage`] = `Final phase must be ${FINAL_PHASE_PERCENTAGE}%`;
-        }
-      } else {
-        if (parseFloat(phase.percentage) !== WORK_PHASE_PERCENTAGE) {
-          errors[`phase_${phase.id}_percentage`] = `Work phase must be ${WORK_PHASE_PERCENTAGE}%`;
-        }
+      if (parseFloat(phase.percentage) !== WORK_PHASE_PERCENTAGE) {
+        errors[`phase_${phase.id}_percentage`] = `Each phase must be ${WORK_PHASE_PERCENTAGE}%`;
       }
 
-      // Validate required months for work phases
-      if (!phase.isFinal && (!phase.requiredMonths || parseFloat(phase.requiredMonths) <= 0)) {
+      if (!phase.requiredMonths || parseFloat(phase.requiredMonths) <= 0) {
         errors[`phase_${phase.id}_months`] = 'Required months must be greater than 0';
       }
 
-      // Validate amount (can be 0 for final phase, but work phases need amount)
-      const phaseAmount = phase.isFinal ? getFinalPhaseAmount() : getPhaseAmount(phase);
-      if (!phase.isFinal && phaseAmount <= 0) {
+      const phaseAmount = getPhaseAmount(phase);
+      if (phaseAmount <= 0) {
         errors[`phase_${phase.id}_amount`] = 'Please add work items with amounts for this phase';
       }
 
@@ -224,13 +198,13 @@ const ProposalModal = ({
       name: phase.name,
       percentage: phase.percentage,
       requiredMonths: phase.requiredMonths,
-      amount: phase.isFinal ? getFinalPhaseAmount() : getPhaseAmount(phase),
+      amount: getPhaseAmount(phase),
       subdivisions: phase.subdivisions,
       isFinal: phase.isFinal,
       paymentSchedule: {
-        upfrontPercentage: phase.isFinal ? 0 : 40,
-        completionPercentage: phase.isFinal ? 0 : 60,
-        finalPercentage: phase.isFinal ? 10 : 0
+        upfrontPercentage: 75,
+        completionPercentage: 25,
+        finalPercentage: 0
       }
     }));
 
@@ -265,9 +239,9 @@ const ProposalModal = ({
             {/* Phases Section */}
             <div className="requests-phases-container">
               <div className="requests-phases-header-info">
-                <h4 className="requests-phases-title">Construction Phases (5 Phases Total)</h4>
+                <h4 className="requests-phases-title">Construction Phases (4 Phases Total)</h4>
                 <span className="requests-phases-limit">
-                  4 work phases (25% each) + 1 final phase (10% auto-calculated)
+                  4 fixed work phases at 25% each
                 </span>
               </div>
               
@@ -279,15 +253,13 @@ const ProposalModal = ({
 
               <div className="requests-phases-list">
                 {phases.map((phase, index) => (
-                  <div key={phase.id} className={`requests-phase-card ${phase.isFinal ? 'requests-phase-final' : 'requests-phase-work'}`}>
+                  <div key={phase.id} className="requests-phase-card requests-phase-work">
                     <div className="requests-phase-header">
                       <h5>
-                        {phase.isFinal ? '🎯 Final Phase: ' : `Phase ${index + 1}: `}
+                        {`Phase ${index + 1}: `}
                         {phase.name}
                       </h5>
-                      {phase.isFinal && (
-                        <span className="requests-phase-badge">Final Touching - 10% (Paid at completion)</span>
-                      )}
+                      <span className="requests-phase-badge">25% of project value</span>
                     </div>
 
                     <div className="requests-phase-form">
@@ -302,7 +274,6 @@ const ProposalModal = ({
                               phaseErrors[`phase_${phase.id}_name`] ? 'requests-input-error' : ''
                             }`}
                             placeholder="e.g., Foundation Work"
-                            disabled={phase.isFixed && phase.isFinal}
                           />
                           {phaseErrors[`phase_${phase.id}_name`] && (
                             <div className="requests-error-message">
@@ -312,7 +283,7 @@ const ProposalModal = ({
                         </div>
 
                         <div className="requests-phase-form-group">
-                          <label>Work Percentage {phase.isFinal ? '(Fixed: 10%)' : '(Fixed: 25%)'}</label>
+                          <label>Work Percentage (Fixed: 25%)</label>
                           <input
                             type="number"
                             value={phase.percentage}
@@ -331,37 +302,35 @@ const ProposalModal = ({
                           )}
                         </div>
 
-                        {!phase.isFinal && (
-                          <div className="requests-phase-form-group">
-                            <label>Required Months to Complete</label>
-                            <input
-                              type="number"
-                              min="0.5"
-                              max="60"
-                              step="0.5"
-                              value={phase.requiredMonths}
-                              onChange={(e) => handlePhaseChange(phase.id, 'requiredMonths', e.target.value)}
-                              className={`requests-proposal-form-control ${
-                                phaseErrors[`phase_${phase.id}_months`] ? 'requests-input-error' : ''
-                              }`}
-                              placeholder="e.g., 2, 3.5"
-                            />
-                            {phaseErrors[`phase_${phase.id}_months`] && (
-                              <div className="requests-error-message">
-                                {phaseErrors[`phase_${phase.id}_months`]}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                        <div className="requests-phase-form-group">
+                          <label>Required Months to Complete</label>
+                          <input
+                            type="number"
+                            min="0.5"
+                            max="60"
+                            step="0.5"
+                            value={phase.requiredMonths}
+                            onChange={(e) => handlePhaseChange(phase.id, 'requiredMonths', e.target.value)}
+                            className={`requests-proposal-form-control ${
+                              phaseErrors[`phase_${phase.id}_months`] ? 'requests-input-error' : ''
+                            }`}
+                            placeholder="e.g., 2, 3.5"
+                          />
+                          {phaseErrors[`phase_${phase.id}_months`] && (
+                            <div className="requests-error-message">
+                              {phaseErrors[`phase_${phase.id}_months`]}
+                            </div>
+                          )}
+                        </div>
 
                         <div className="requests-phase-form-group">
-                          <label>{phase.isFinal ? 'Final Phase Amount (Auto-calculated: 10% of work total)' : 'Phase Total Amount (₹) - Auto-calculated from work items'}</label>
+                          <label>Phase Total Amount (₹) - Auto-calculated from work items</label>
                           <input
                             type="number"
                             min="0"
                             step="500"
-                            value={phase.isFinal ? getFinalPhaseAmount() : getPhaseAmount(phase)}
-                            onChange={(e) => !phase.isFinal && handlePhaseChange(phase.id, 'amount', e.target.value)}
+                            value={getPhaseAmount(phase)}
+                            onChange={(e) => handlePhaseChange(phase.id, 'amount', e.target.value)}
                             className={`requests-proposal-form-control ${
                               phaseErrors[`phase_${phase.id}_amount`] ? 'requests-input-error' : ''
                             } requests-input-readonly`}
@@ -369,11 +338,6 @@ const ProposalModal = ({
                             disabled={true}
                             readOnly
                           />
-                          {phase.isFinal && (
-                            <small style={{ color: '#666', marginTop: '5px', display: 'block' }}>
-                              Auto-calculated based on work phases total
-                            </small>
-                          )}
                           {phaseErrors[`phase_${phase.id}_amount`] && (
                             <div className="requests-error-message">
                               {phaseErrors[`phase_${phase.id}_amount`]}
@@ -383,7 +347,7 @@ const ProposalModal = ({
                       </div>
 
                       {/* Subdivisions Section - For work phases */}
-                      {!phase.isFinal && phase.subdivisions && (
+                      {phase.subdivisions && (
                         <div className="requests-subdivisions-container">
                           <div className="requests-subdivisions-header">
                             <span className="requests-subdivisions-title">Work Items Breakdown (Optional)</span>
@@ -471,10 +435,6 @@ const ProposalModal = ({
                 <div className="requests-summary-item">
                   <span><strong>Total Project Amount:</strong></span>
                   <span className="requests-summary-amount" style={{ fontWeight: 'bold', fontSize: '16px' }}>₹{totalAmount.toLocaleString('en-IN')}</span>
-                </div>
-                <div className="requests-summary-item">
-                  <span>Final Phase (10% of total):</span>
-                  <span className="requests-summary-amount">₹{getFinalPhaseAmount().toLocaleString('en-IN')}</span>
                 </div>
               </div>
 

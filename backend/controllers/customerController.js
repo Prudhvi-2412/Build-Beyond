@@ -750,6 +750,11 @@ const updatePassword = async (req, res) => {
       return res.status(400).json({ message: "Incorrect current password." });
     }
 
+    const isSameAsOld = await bcrypt.compare(newPassword, customer.password);
+    if (isSameAsOld) {
+      return res.status(400).json({ message: "New password cannot be same as current password." });
+    }
+
     customer.password = newPassword;
     await customer.save();
 

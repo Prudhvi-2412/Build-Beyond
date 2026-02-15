@@ -57,6 +57,11 @@ const ProjectCard = ({
             {project.buildingType ? project.buildingType.charAt(0).toUpperCase() + project.buildingType.slice(1) : "Other"}
           </span>
           <span className="ongoing-status-tag">Under Construction</span>
+          {project.blockedByPlatformFee && (
+            <span className="ongoing-status-tag" style={{ backgroundColor: '#b91c1c' }}>
+              Platform Fee Pending
+            </span>
+          )}
         </div>
 
         {/* PROGRESS BAR */}
@@ -80,6 +85,11 @@ const ProjectCard = ({
         <p>
           Current phase: <span>{getPhaseLabel(project)}</span>
         </p>
+        {project.blockedByPlatformFee && (
+          <p style={{ color: '#b91c1c', fontWeight: 600, marginTop: '-6px' }}>
+            Next phase is locked until the previous phase platform fee is collected.
+          </p>
+        )}
 
         {/* ACTION BUTTONS */}
         <div className="ongoing-action-buttons">

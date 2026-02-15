@@ -911,6 +911,11 @@ const updatePassword = async (req, res) => {
       return res.status(400).json({ message: "Incorrect current password." });
     }
 
+    const isSameAsOld = await bcrypt.compare(newPassword, worker.password);
+    if (isSameAsOld) {
+      return res.status(400).json({ message: "New password cannot be same as current password." });
+    }
+
     worker.password = newPassword;
     await worker.save();
 
@@ -1074,6 +1079,19 @@ const submitMilestone = async (req, res) => {
         .json({
           error: 'Invalid project type. Must be "architect" or "interior".',
         });
+    }
+
+    if (milestonePercentage > 25 && project?.paymentDetails?.milestonePayments?.length) {
+      const previousPercentage = milestonePercentage - 25;
+      const previousPayment = project.paymentDetails.milestonePayments.find(
+        (payment) => Number(payment.percentage) === previousPercentage,
+      );
+
+      if (previousPayment && (previousPayment.platformFeeStatus || "not_due") !== "collected") {
+        return res.status(400).json({
+          error: `Cannot move to ${milestonePercentage}% milestone until ${previousPercentage}% milestone platform fee is collected.`,
+        });
+      }
     }
 
     // Check if milestone with this percentage already exists

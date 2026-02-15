@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 export default function SecuritySection() {
   const [securityForm, setSecurityForm] = useState({
@@ -6,13 +6,37 @@ export default function SecuritySection() {
     newPassword: "",
     confirmPassword: ""
   });
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [loadingTwoFactor, setLoadingTwoFactor] = useState(true);
+
+  useEffect(() => {
+    const fetchTwoFactorStatus = async () => {
+      try {
+        const res = await fetch("/api/2fa/status", {
+          method: "GET",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setTwoFactorEnabled(Boolean(data.twoFactorEnabled));
+        }
+      } catch (error) {
+        console.error("Failed to load 2FA status", error);
+      } finally {
+        setLoadingTwoFactor(false);
+      }
+    };
+
+    fetchTwoFactorStatus();
+  }, []);
 
   function handleSecurityChange(e) {
     const { name, value } = e.target;
     setSecurityForm((prev) => ({ ...prev, [name]: value }));
   }
 
-  function submitSecurity(e) {
+  async function submitSecurity(e) {
     e.preventDefault();
     if (!securityForm.currentPassword) {
       alert("Enter current password");
@@ -27,9 +51,55 @@ export default function SecuritySection() {
       return;
     }
 
-    // In production, call your API endpoint to change password.
-    alert("Password changed (demo). Implement backend call.");
-    setSecurityForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    if (securityForm.currentPassword === securityForm.newPassword) {
+      alert("New password cannot be same as current password");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/company/password/update", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: securityForm.currentPassword,
+          newPassword: securityForm.newPassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || data.message || "Failed to update password");
+        return;
+      }
+
+      alert(data.message || "Password updated successfully");
+      setSecurityForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (error) {
+      alert("Failed to update password");
+    }
+  }
+
+  const toggleTwoFactor = async () => {
+    try {
+      const nextValue = !twoFactorEnabled;
+      const res = await fetch("/api/2fa/status", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: nextValue }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.message || "Failed to update 2FA");
+        return;
+      }
+
+      setTwoFactorEnabled(nextValue);
+      alert(data.message || "2FA setting updated");
+    } catch (error) {
+      alert("Failed to update 2FA");
+    }
   }
 
   return (
@@ -72,6 +142,26 @@ export default function SecuritySection() {
         <div className="cs-actions">
           <button type="submit" className="cs-btn-primary">
             Update Password
+          </button>
+        </div>
+
+        <hr style={{ margin: "1.5rem 0" }} />
+        <div className="cs-form-row">
+          <label>Two-Factor Authentication (2FA)</label>
+          <p style={{ color: "#666", marginBottom: "0.5rem" }}>
+            Require OTP verification every time you login.
+          </p>
+          <button
+            type="button"
+            className="cs-btn-primary"
+            disabled={loadingTwoFactor}
+            onClick={toggleTwoFactor}
+          >
+            {loadingTwoFactor
+              ? "Loading..."
+              : twoFactorEnabled
+              ? "Disable 2FA"
+              : "Enable 2FA"}
           </button>
         </div>
       </form>
