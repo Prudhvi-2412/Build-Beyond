@@ -61,6 +61,9 @@ const companySchema = new mongoose.Schema(
       enum: ["pending", "verified", "rejected"],
       default: "pending",
     },
+    rejectionReason: { type: String, default: "" },
+    verificationReviewedAt: { type: Date },
+    verificationReviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "PlatformManager" },
     companyName: { type: String, required: true },
     contactPerson: { type: String, required: true },
     email: {
@@ -123,6 +126,9 @@ const workerSchema = new mongoose.Schema(
       enum: ["pending", "verified", "rejected"],
       default: "pending",
     },
+    rejectionReason: { type: String, default: "" },
+    verificationReviewedAt: { type: Date },
+    verificationReviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "PlatformManager" },
     name: { type: String, required: true },
     email: {
       type: String,
@@ -239,6 +245,7 @@ workerSchema.index({ availability: 1 });
     next();
   });
 });
+
 
 // Architect Hiring Schema
 const architectHiringSchema = new mongoose.Schema({
@@ -883,7 +890,47 @@ const jobApplicationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 const ChatRoom = require('./chatModel');
-// Complaint Schema
+// Platform Manager Schema
+const platformManagerSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true, match: [/^\S+@\S+\.\S+$/, "Invalid email"] },
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+  createdBy: { type: String, default: 'superadmin' },
+  lastLogin: { type: Date },
+  stats: {
+    totalAssigned: { type: Number, default: 0 },
+    totalCompleted: { type: Number, default: 0 },
+    pendingTasks: { type: Number, default: 0 },
+    companiesVerified: { type: Number, default: 0 },
+    workersVerified: { type: Number, default: 0 },
+    complaintsResolved: { type: Number, default: 0 }
+  }
+}, { timestamps: true });
+
+// Hash password before saving
+platformManagerSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  this.password = await bcrypt.hash(this.password, 10);
+  next();
+});
+
+// Verification Task Schema (for tracking company and worker verifications)
+const verificationTaskSchema = new mongoose.Schema({
+  type: { type: String, enum: ['company', 'worker'], required: true },
+  entityId: { type: mongoose.Schema.Types.ObjectId, required: true },
+  entityName: { type: String, required: true },
+  assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'PlatformManager' },
+  status: { type: String, enum: ['pending', 'in-progress', 'verified', 'rejected', 'unassigned'], default: 'unassigned' },
+  assignedAt: { type: Date },
+  completedAt: { type: Date },
+  completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'PlatformManager' },
+  notes: { type: String },
+  createdAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+// Complaint Schema (updated with assignment tracking)
 const complaintSchema = new mongoose.Schema({
   projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'ConstructionProjectSchema', required: true },
   milestone: { type: Number, enum: [0, 25, 50, 75, 100], required: true },
@@ -891,14 +938,25 @@ const complaintSchema = new mongoose.Schema({
   senderId: { type: mongoose.Schema.Types.ObjectId, required: true },
   message: { type: String, required: true },
   isViewed: { type: Boolean, default: false },
+  assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'PlatformManager' },
+  status: { type: String, enum: ['pending', 'in-progress', 'resolved', 'unassigned'], default: 'unassigned' },
+  resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'PlatformManager' },
+  resolvedAt: { type: Date },
+  assignedAt: { type: Date },
   replies: [
     {
-      adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
+      adminId: { type: mongoose.Schema.Types.ObjectId },
       message: { type: String, required: true },
       createdAt: { type: Date, default: Date.now }
     }
   ],
   createdAt: { type: Date, default: Date.now }
+});
+
+// Task Assignment Counter Schema (for round-robin algorithm)
+const taskAssignmentCounterSchema = new mongoose.Schema({
+  lastAssignedIndex: { type: Number, default: -1 },
+  type: { type: String, enum: ['verification', 'complaint'], required: true, unique: true }
 });
 
 // Transaction Schema - Complete Payment & Revenue Tracking
@@ -970,9 +1028,12 @@ module.exports = {
   Bid: mongoose.model('Bid', BidSchema),
   WorkerToCompany: mongoose.model('WorkerToCompany', jobApplicationSchema),
   CompanytoWorker: mongoose.model('CompanytoWorker', companyToWorkerSchema),
-  // EXPORT THE NEW FAVORITE DESIGN MODEL
   FavoriteDesign: mongoose.model('FavoriteDesign', favoriteDesignSchema),
   ChatRoom: ChatRoom,
   Complaint: mongoose.model('Complaint', complaintSchema),
   Transaction: mongoose.model('Transaction', transactionSchema),
+  PlatformManager: mongoose.model('PlatformManager', platformManagerSchema),
+  VerificationTask: mongoose.model('VerificationTask', verificationTaskSchema),
+  TaskAssignmentCounter: mongoose.model('TaskAssignmentCounter', taskAssignmentCounterSchema),
+  SystemSettings: require('./SystemSettings'),
 };
