@@ -22,6 +22,8 @@ const CompanyOngoing = () => {
   const [complaintLoading, setComplaintLoading] = useState(false);
   const [complaintSuccess, setComplaintSuccess] = useState(false);
   const [complaintError, setComplaintError] = useState(null);
+  const [complaintHistory, setComplaintHistory] = useState([]);
+  const [complaintHistoryLoading, setComplaintHistoryLoading] = useState(false);
   const [unviewedComplaints, setUnviewedComplaints] = useState({}); // { projectId: count }
 
   const navigate = useNavigate();
@@ -136,6 +138,30 @@ const CompanyOngoing = () => {
     });
   };
 
+  const fetchComplaintHistory = async (projectId, milestone) => {
+    setComplaintHistoryLoading(true);
+    try {
+      const response = await fetch(`/api/complaints/${projectId}`, {
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setComplaintHistory([]);
+        return;
+      }
+
+      const milestoneValue = Number(milestone === "general" ? 0 : milestone);
+      const filtered = (data.complaints || []).filter(
+        (complaint) => Number(complaint.milestone) === milestoneValue,
+      );
+      setComplaintHistory(filtered);
+    } catch {
+      setComplaintHistory([]);
+    } finally {
+      setComplaintHistoryLoading(false);
+    }
+  };
+
   /* -------------------------------------------------
    *  Complaint Handling
    * -------------------------------------------------*/
@@ -144,12 +170,15 @@ const CompanyOngoing = () => {
     setComplaintText({});
     setComplaintSuccess(false);
     setComplaintError(null);
+    setComplaintHistory([]);
+    fetchComplaintHistory(projectId, milestone);
   };
   const handleCloseComplaint = () => {
     setShowComplaintModal(null);
     setComplaintText({});
     setComplaintSuccess(false);
     setComplaintError(null);
+    setComplaintHistory([]);
   };
   const handleSubmitComplaint = async (projectId, milestone) => {
     setComplaintLoading(true);
@@ -162,13 +191,12 @@ const CompanyOngoing = () => {
         body: JSON.stringify({
           projectId,
           milestone: milestone === 'general' ? 0 : milestone,
-          senderType: 'company',
-          senderId: projectId, // Replace with actual companyId if available in context
           message: complaintText[`${projectId}_${milestone}`]
         })
       });
       setComplaintSuccess(true);
       setComplaintText({});
+      await fetchComplaintHistory(projectId, milestone);
     } catch (err) {
       setComplaintError('Failed to submit complaint');
     }
@@ -250,6 +278,8 @@ const CompanyOngoing = () => {
         complaintLoading={complaintLoading}
         complaintSuccess={complaintSuccess}
         complaintError={complaintError}
+        complaintHistory={complaintHistory}
+        complaintHistoryLoading={complaintHistoryLoading}
       />
     </div>
   );

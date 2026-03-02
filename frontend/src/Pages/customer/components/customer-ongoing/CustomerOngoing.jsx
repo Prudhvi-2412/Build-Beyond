@@ -23,6 +23,8 @@ const CustomerOngoing = () => {
   const [complaintLoading, setComplaintLoading] = useState(false);
   const [complaintSuccess, setComplaintSuccess] = useState(false);
   const [complaintError, setComplaintError] = useState(null);
+  const [complaintHistory, setComplaintHistory] = useState([]);
+  const [complaintHistoryLoading, setComplaintHistoryLoading] = useState(false);
   const [unviewedMessages, setUnviewedMessages] = useState({}); // { projectId: count }
 
   const getProposalPhases = (project) =>
@@ -355,17 +357,38 @@ const CustomerOngoing = () => {
     }
   };
 
+  const fetchComplaintHistory = async (projectId, milestone) => {
+    setComplaintHistoryLoading(true);
+    try {
+      const response = await axios.get(`/api/complaints/${projectId}`, {
+        withCredentials: true,
+      });
+      const milestoneValue = Number(milestone === "general" ? 0 : milestone);
+      const filtered = (response.data.complaints || []).filter(
+        (complaint) => Number(complaint.milestone) === milestoneValue,
+      );
+      setComplaintHistory(filtered);
+    } catch {
+      setComplaintHistory([]);
+    } finally {
+      setComplaintHistoryLoading(false);
+    }
+  };
+
   const handleOpenComplaint = (projectId, milestone) => {
     setShowComplaintModal(`${projectId}_${milestone}`);
     setComplaintText({});
     setComplaintSuccess(false);
     setComplaintError(null);
+    setComplaintHistory([]);
+    fetchComplaintHistory(projectId, milestone);
   };
   const handleCloseComplaint = () => {
     setShowComplaintModal(null);
     setComplaintText({});
     setComplaintSuccess(false);
     setComplaintError(null);
+    setComplaintHistory([]);
   };
   const handleSubmitComplaint = async (projectId, milestone) => {
     setComplaintLoading(true);
@@ -376,14 +399,13 @@ const CustomerOngoing = () => {
         {
           projectId,
           milestone,
-          senderType: "customer",
-          senderId: projectId, // Replace with actual customerId if available in context
           message: complaintText[`${projectId}_${milestone}`],
         },
         { withCredentials: true },
       );
       setComplaintSuccess(true);
       setComplaintText({});
+      await fetchComplaintHistory(projectId, milestone);
     } catch (err) {
       setComplaintError("Failed to submit complaint");
     }
@@ -2932,7 +2954,6 @@ const CustomerOngoing = () => {
                                   backgroundColor: "#fff",
                                   borderRadius: "6px",
                                   padding: "1rem",
-                                  borderLeft: "4px solid #8b5cf6",
                                 }}
                               >
                                 <p
@@ -3124,6 +3145,52 @@ const CustomerOngoing = () => {
             Complaint submitted successfully!
           </div>
         )}
+        <div
+          style={{
+            marginBottom: 12,
+            padding: 10,
+            border: "1px solid #e2e8f0",
+            borderRadius: 8,
+            maxHeight: 220,
+            overflowY: "auto",
+            backgroundColor: "#f8fafc",
+          }}
+        >
+          <strong style={{ display: "block", marginBottom: 8 }}>
+            Complaint Thread
+          </strong>
+          {complaintHistoryLoading ? (
+            <p style={{ margin: 0, color: "#64748b" }}>Loading complaint history...</p>
+          ) : complaintHistory.length ? (
+            complaintHistory.map((item) => (
+              <div
+                key={item._id}
+                style={{ marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid #e2e8f0" }}
+              >
+                <p style={{ margin: "0 0 6px 0" }}>
+                  <strong>You:</strong> {item.message}
+                </p>
+                <p style={{ margin: "0 0 6px 0", fontSize: 12, color: "#64748b" }}>
+                  {new Date(item.createdAt).toLocaleString()}
+                </p>
+                {item.replies?.length ? (
+                  item.replies.map((reply) => (
+                    <p
+                      key={reply._id || `${reply.adminId}-${reply.createdAt}`}
+                      style={{ margin: "4px 0 0 0", color: "#1e293b" }}
+                    >
+                      <strong>{reply.adminName || "Platform Manager"}:</strong> {reply.message}
+                    </p>
+                  ))
+                ) : (
+                  <p style={{ margin: 0, color: "#94a3b8", fontSize: 13 }}>No reply yet</p>
+                )}
+              </div>
+            ))
+          ) : (
+            <p style={{ margin: 0, color: "#94a3b8" }}>No complaints for this milestone yet.</p>
+          )}
+        </div>
         <button
           onClick={() => {
             const [projectId, milestone] = showComplaintModal.split("_");
