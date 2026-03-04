@@ -21,8 +21,7 @@
 .ls-landing-page {
   min-height: 100vh;
   background: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.6)),
-    url("https://images.unsplash.com/photo-1503387762-592deb58ef4e?ixlib=rb-4.0.3&auto=format&fit=crop&q=80")
-      center/cover no-repeat;
+    url("https://images.unsplash.com/photo-1503387762-592deb58ef4e?ixlib=rb-4.0.3&auto=format&fit=crop&q=80") center/cover no-repeat;
   font-family: "Segoe UI", sans-serif;
   display: flex;
   flex-direction: column;
@@ -34,6 +33,10 @@
   position: absolute;
   top: 2rem;
   right: 2rem;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .ls-admin-login-btn {
@@ -51,6 +54,10 @@
 .ls-admin-login-btn:hover {
   background: rgba(255, 255, 255, 0.25);
   transform: translateY(-2px);
+}
+
+.ls-admin-login-secondary {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .ls-main-container {
@@ -376,9 +383,11 @@ a.ls-disabled {
     grid-template-columns: 1fr;
     text-align: center;
   }
+
   .ls-hero-content h1 {
     font-size: 3rem;
   }
+
   .ls-auth-card {
     max-width: 500px;
     margin: 0 auto;
@@ -386,10 +395,12 @@ a.ls-disabled {
 }
 
 @media (max-width: 600px) {
+
   .ls-signup-columns,
   .ls-password-section {
     grid-template-columns: 1fr;
   }
+
   .ls-user-type-buttons {
     flex-direction: column;
   }
