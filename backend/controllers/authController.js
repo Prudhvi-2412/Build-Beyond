@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { JWT_SECRET } = require('../config/constants');
 const { Customer, Company, Worker } = require('../models');
+const { autoAssignVerification } = require('./platformManagerController');
 const upload = require('../middlewares/upload').upload; // Multer upload
  
 const signup = async (req, res) => {
@@ -36,6 +37,18 @@ const signup = async (req, res) => {
     }
 
     await user.save();
+
+    // Auto-assign verification task to platform manager
+    if (role === 'company' || role === 'worker') {
+      try {
+        const entityName = role === 'company' ? user.companyName : user.name;
+        await autoAssignVerification(role, user._id, entityName);
+      } catch (error) {
+        console.error('Error auto-assigning verification:', error);
+        // Don't fail signup if assignment fails
+      }
+    }
+
     res.status(201).json({ message: 'Signup successful' });
   } catch (error) {
     if (error.code === 11000) res.status(400).json({ message: 'Email or Aadhaar number already exists' });
