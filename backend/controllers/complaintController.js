@@ -1,17 +1,43 @@
-const Complaint = require('../models/index').Complaint;
-const mongoose = require('mongoose');
+const { Complaint, ConstructionProjectSchema, PlatformManager } = require('../models');
+const { autoAssignComplaint } = require('./platformManagerController');
 
 // Submit a complaint (company or customer)
 exports.submitComplaint = async (req, res) => {
   try {
-    const { projectId, milestone, senderType, senderId, message } = req.body;
+    const { projectId, milestone, message } = req.body;
+
+    if (!req.user || !req.user.user_id || !req.user.role) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const senderType = req.user.role === 'company' ? 'company' : req.user.role === 'customer' ? 'customer' : null;
+    if (!senderType) {
+      return res.status(403).json({ error: 'Only company or customer can submit complaints' });
+    }
+
+    const senderId = req.user.user_id;
+
     console.log('📝 Submitting complaint:', { projectId, milestone, senderType, senderId, message });
     if (![0, 25, 50, 75, 100].includes(Number(milestone))) {
       return res.status(400).json({ error: 'Invalid milestone' });
     }
+
+    const project = await ConstructionProjectSchema.findById(projectId).select('customerId companyId');
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const senderMatchesProject =
+      (senderType === 'customer' && project.customerId?.toString() === senderId.toString()) ||
+      (senderType === 'company' && project.companyId?.toString() === senderId.toString());
+
+    if (!senderMatchesProject) {
+      return res.status(403).json({ error: 'You are not allowed to submit complaint for this project' });
+    }
+
     const complaint = new Complaint({
       projectId,
-      milestone,
+      milestone: Number(milestone),
       senderType,
       senderId,
       message,
@@ -19,6 +45,15 @@ exports.submitComplaint = async (req, res) => {
     });
     await complaint.save();
     console.log('✅ Complaint saved:', complaint);
+
+    // Auto-assign complaint to platform manager
+    try {
+      await autoAssignComplaint(complaint._id);
+    } catch (error) {
+      console.error('Error auto-assigning complaint:', error);
+      // Don't fail complaint submission if assignment fails
+    }
+
     res.json({ success: true, complaint });
   } catch (err) {
     console.error('❌ Error saving complaint:', err);
@@ -32,6 +67,27 @@ exports.getProjectComplaints = async (req, res) => {
     const { projectId } = req.params;
     const complaints = await Complaint.find({ projectId })
       .sort({ createdAt: -1 });
+
+    const replyAdminIds = complaints
+      .flatMap((complaint) => complaint.replies || [])
+      .map((reply) => reply.adminId)
+      .filter(Boolean);
+
+    const replyAdmins = await PlatformManager.find({ _id: { $in: replyAdminIds } }).select('name username');
+    const replyAdminMap = new Map(replyAdmins.map((admin) => [admin._id.toString(), admin]));
+
+    const complaintsWithReplyDetails = complaints.map((complaint) => {
+      const complaintData = complaint.toObject();
+      complaintData.replies = (complaint.replies || []).map((reply) => {
+        const admin = reply.adminId ? replyAdminMap.get(reply.adminId.toString()) : null;
+        return {
+          ...reply.toObject(),
+          adminName: admin?.name || 'Platform Manager',
+          adminUsername: admin?.username || ''
+        };
+      });
+      return complaintData;
+    });
     
     // Mark all complaints as viewed
     await Complaint.updateMany(
@@ -39,7 +95,7 @@ exports.getProjectComplaints = async (req, res) => {
       { $set: { isViewed: true } }
     );
     
-    res.json({ success: true, complaints });
+    res.json({ success: true, complaints: complaintsWithReplyDetails });
   } catch (err) {
     console.error('Error fetching complaints:', err);
     res.status(500).json({ error: 'Failed to fetch complaints', details: err.message });

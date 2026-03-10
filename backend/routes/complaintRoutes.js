@@ -1,9 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const complaintController = require("../controllers/complaintController");
+const auth = require("../middlewares/auth");
 
 // submit a complaint by company or customer
-router.post("/", complaintController.submitComplaint);
+router.post("/", auth, complaintController.submitComplaint);
 
 // count of unviewed complaints for the admin dashboard
 router.get("/unviewed/count", complaintController.getUnviewedComplaintsCount);
@@ -15,7 +16,7 @@ router.get(
 );
 
 // get all complaints for a project
-router.get("/:projectId", complaintController.getProjectComplaints);
+router.get("/:projectId", auth, complaintController.getProjectComplaints);
 
 // admin to reply to a complaint
 router.post("/:complaintId/reply", complaintController.replyToComplaint);
