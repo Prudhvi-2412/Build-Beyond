@@ -1,30 +1,30 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Lock, Mail, Eye, EyeOff, Shield, Loader2 } from "lucide-react";
+import { Lock, User, Eye, EyeOff, Shield, Loader2 } from "lucide-react";
 import "./AdminLogin.css";
 
-const AdminLogin = () => {
+const PlatformManagerLogin = () => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState({
-    email: false,
+    username: false,
     password: false,
   });
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await fetch("/api/admin/verify-session", {
+        const res = await fetch("/api/platform-manager/verify-session", {
           credentials: "include",
         });
         const data = await res.json();
-        if (res.ok && data.authenticated && data.role === "superadmin") {
-          navigate("/admin-view/admindashboard", { replace: true });
-        } else if (res.ok && data.authenticated && data.role === "platform_manager") {
+        if (res.ok && data.authenticated && data.role === "platform_manager") {
           navigate("/platform-manager/dashboard", { replace: true });
+        } else if (res.ok && data.authenticated && data.role === "superadmin") {
+          navigate("/admin-view/admindashboard", { replace: true });
         } else {
           setLoading(false);
         }
@@ -35,51 +35,42 @@ const AdminLogin = () => {
     checkAuth();
   }, [navigate]);
 
-  const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const validatePassword = (pwd) => pwd.length >= 8;
+  const validateUsername = (username) => username.trim().length > 0;
+  const validatePassword = (pwd) => pwd.length >= 6;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const emailValid = validateEmail(email);
+    const usernameValid = validateUsername(username);
     const passwordValid = validatePassword(password);
 
     setErrors({
-      email: !emailValid,
+      username: !usernameValid,
       password: !passwordValid,
     });
 
-    if (!emailValid || !passwordValid) return;
+    if (!usernameValid || !passwordValid) return;
 
     try {
-      const response = await fetch("/api/admin/login", {
+      const response = await fetch("/api/platform-manager/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ username, password }),
       });
 
       const data = await response.json();
 
-      if (response.ok && data.role === "superadmin") {
-        navigate("/admin-view/admindashboard");
-      } else if (response.ok && data.role === "platform_manager") {
-        alert("Please use the Platform Manager login page.");
+      if (response.ok && data.role === "platform_manager") {
+        navigate("/platform-manager/dashboard");
+      } else if (response.ok && data.role === "superadmin") {
+        alert("Please use the Superadmin login page.");
       } else {
-        alert(data.message || "Invalid superadmin credentials");
+        alert(data.message || "Invalid credentials");
       }
     } catch (error) {
       console.error("Login error:", error);
       alert("Login failed. Please try again.");
-    }
-  };
-
-  const handleForgotPassword = (e) => {
-    e.preventDefault();
-    if (validateEmail(email)) {
-      alert("Password reset link has been sent to your email address.");
-    } else {
-      alert("Please enter a valid email address first.");
     }
   };
 
@@ -106,26 +97,27 @@ const AdminLogin = () => {
           <div className="admin-login-icon">
             <Shield size={32} />
           </div>
-          <h1>Superadmin Login</h1>
-          <p>Enter your details to access the dashboard</p>
+          <h1>Platform Manager Login</h1>
+          <p>Enter your credentials to access your dashboard</p>
         </div>
 
-        <form onSubmit={handleSubmit} id="adminLoginForm">
-          {/* Email Field */}
-          <div className={`admin-login-input-group ${errors.email ? "admin-login-error" : ""}`}>
-            <label htmlFor="email">Email Address</label>
+        <form onSubmit={handleSubmit} id="platformManagerLoginForm">
+          {/* Username Field */}
+          <div className={`admin-login-input-group ${errors.username ? "admin-login-error" : ""}`}>
+            <label htmlFor="username">Username</label>
             <div className="admin-login-input-wrapper">
-              <Mail size={18} className="input-icon" />
+              <User size={18} className="input-icon" />
               <input
-                type="email"
-                id="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onBlur={() => setErrors((prev) => ({ ...prev, email: !validateEmail(email) }))}
-                placeholder="Enter your email"
+                type="text"
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                onBlur={() => setErrors((prev) => ({ ...prev, username: !validateUsername(username) }))}
+                placeholder="Enter your username"
+                autoComplete="username"
               />
             </div>
-            <span className="admin-login-error-message">Please enter a valid email address</span>
+            <span className="admin-login-error-message">Please enter your username</span>
           </div>
 
           {/* Password Field */}
@@ -140,25 +132,24 @@ const AdminLogin = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 onBlur={() => setErrors((prev) => ({ ...prev, password: !validatePassword(password) }))}
                 placeholder="Enter your password"
+                autoComplete="current-password"
               />
               <button
                 type="button"
                 className="admin-login-toggle-password"
                 onClick={() => setShowPassword(!showPassword)}
+                aria-label="Toggle password visibility"
               >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            <span className="admin-login-error-message">Password must be at least 8 characters</span>
+            <span className="admin-login-error-message">Password must be at least 6 characters</span>
           </div>
 
           <div className="admin-login-remember-forgot">
             <div className="admin-login-remember-me">
               <input type="checkbox" id="rememberMe" />
               <label htmlFor="rememberMe">Remember me</label>
-            </div>
-            <div className="admin-login-forgot-password">
-              <a href="#" onClick={handleForgotPassword}>Forgot password?</a>
             </div>
           </div>
 
@@ -167,7 +158,7 @@ const AdminLogin = () => {
           </button>
 
           <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '0.9rem', color: '#666' }}>
-            <p>Are you a platform manager? <Link to="/platform-manager-login" style={{ color: '#007bff', textDecoration: 'none' }}>Login here</Link></p>
+            <p>Are you a superadmin? <Link to="/admin-login" style={{ color: '#007bff', textDecoration: 'none' }}>Login here</Link></p>
           </div>
         </form>
       </div>
@@ -175,4 +166,4 @@ const AdminLogin = () => {
   );
 };
 
-export default AdminLogin;
+export default PlatformManagerLogin;

@@ -1,38 +1,92 @@
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
 const {
   JWT_SECRET,
   ADMIN_EMAIL,
   ADMIN_PASSWORD,
   ADMIN_PASSKEY,
 } = require("../config/constants");
+const { PlatformManager } = require("../models");
 
-module.exports = function authAdmin(req, res, next) {
+module.exports = async function authAdmin(req, res, next) {
   try {
+    // Handle admin/platform-manager login
     if (req.path === "/admin/login" || req.url === "/admin/login") {
-      const { email, password, passKey } = req.body;
+      const { email, password, role } = req.body;
 
-      if (
-        email === ADMIN_EMAIL &&
-        password === ADMIN_PASSWORD &&
-        passKey === ADMIN_PASSKEY
-      ) {
-        // Generate JWT token for admin
-        const token = jwt.sign({ role: "admin" }, JWT_SECRET, {
-          expiresIn: "1h",
+      // Check if this is superadmin login
+      if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+        const token = jwt.sign({ role: "superadmin", email: ADMIN_EMAIL }, JWT_SECRET, {
+          expiresIn: "8h",
         });
         res.cookie("admin_token", token, {
           httpOnly: true,
           sameSite: "lax",
           secure: false,
-          maxAge: 60 * 60 * 1000,
+          maxAge: 8 * 60 * 60 * 1000,
           path: "/",
         });
-        return res.json({ message: "Admin authenticated", token });
-      } else {
-        return res.status(401).json({ message: "Invalid admin credentials" });
+        return res.json({ message: "Superadmin authenticated", token, role: "superadmin" });
       }
+
+      return res.status(401).json({ message: "Invalid admin credentials" });
     }
 
+    // Handle platform manager login
+    if (req.path === "/platform-manager/login" || req.url === "/platform-manager/login") {
+      const { username, password } = req.body;
+
+      if (!username || !password) {
+        return res.status(400).json({ message: "Username and password are required" });
+      }
+
+      const platformManager = await PlatformManager.findOne({ username, status: 'active' });
+      if (!platformManager) {
+        return res.status(401).json({ message: "Invalid credentials or account inactive" });
+      }
+
+      const isMatch = await bcrypt.compare(password, platformManager.password);
+      if (!isMatch) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      // Update last login
+      platformManager.lastLogin = new Date();
+      await platformManager.save();
+
+      const token = jwt.sign(
+        { 
+          role: "platform_manager", 
+          id: platformManager._id, 
+          username: platformManager.username,
+          name: platformManager.name 
+        }, 
+        JWT_SECRET, 
+        { expiresIn: "8h" }
+      );
+      
+      res.cookie("admin_token", token, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: false,
+        maxAge: 8 * 60 * 60 * 1000,
+        path: "/",
+      });
+      
+      return res.json({ 
+        message: "Platform manager authenticated", 
+        token, 
+        role: "platform_manager",
+        user: {
+          id: platformManager._id,
+          name: platformManager.name,
+          username: platformManager.username,
+          email: platformManager.email
+        }
+      });
+    }
+
+    // Verify token for protected routes
     const headerToken = req.header("Authorization")?.replace("Bearer ", "");
     const cookieToken = req.cookies?.admin_token;
     const token = headerToken || cookieToken;
@@ -44,8 +98,8 @@ module.exports = function authAdmin(req, res, next) {
     }
 
     const verified = jwt.verify(token, JWT_SECRET);
-    if (verified.role !== "admin") {
-      const err = new Error("Forbidden: Not an admin");
+    if (verified.role !== "platform_manager" && verified.role !== "superadmin") {
+      const err = new Error("Forbidden: Not an admin or platform manager");
       err.status = 403;
       return next(err);
     }

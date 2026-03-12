@@ -404,8 +404,11 @@ const LoginSignUp = () => {
   return (
     <div className="ls-landing-page">
       <div className="ls-admin-link">
-        <Link to="/admin-login" className="ls-admin-login-btn">
-          Admin Login
+        <Link to="/platform-manager-login" className="ls-admin-login-btn">
+          Platform Manager
+        </Link>
+        <Link to="/admin-login" className="ls-admin-login-btn ls-admin-login-secondary">
+          Admin
         </Link>
       </div>
 
@@ -436,17 +439,15 @@ const LoginSignUp = () => {
         <div className="ls-auth-card">
           <div className="ls-auth-tabs">
             <button
-              className={`ls-tab-button ${
-                activeTab === "signin" ? "active" : ""
-              }`}
+              className={`ls-tab-button ${activeTab === "signin" ? "active" : ""
+                }`}
               onClick={() => handleTabChange("signin")}
             >
               Sign In
             </button>
             <button
-              className={`ls-tab-button ${
-                activeTab === "signup" ? "active" : ""
-              }`}
+              className={`ls-tab-button ${activeTab === "signup" ? "active" : ""
+                }`}
               onClick={() => handleTabChange("signup")}
             >
               Sign Up
@@ -468,9 +469,8 @@ const LoginSignUp = () => {
                     <input
                       type="email"
                       id="signin-email"
-                      className={`ls-form-input ${
-                        errors["signin-email"] ? "error" : ""
-                      }`}
+                      className={`ls-form-input ${errors["signin-email"] ? "error" : ""
+                        }`}
                       value={signinData.email}
                       onChange={(e) => handleInputChange(e, "signin")}
                       required
@@ -485,9 +485,8 @@ const LoginSignUp = () => {
                     <input
                       type="password"
                       id="signin-password"
-                      className={`ls-form-input ${
-                        errors["signin-password"] ? "error" : ""
-                      }`}
+                      className={`ls-form-input ${errors["signin-password"] ? "error" : ""
+                        }`}
                       value={signinData.password}
                       onChange={(e) => handleInputChange(e, "signin")}
                       required
@@ -538,9 +537,8 @@ const LoginSignUp = () => {
                         <button
                           key={type}
                           type="button"
-                          className={`ls-user-type-btn ${
-                            userType === type ? "active" : ""
-                          }`}
+                          className={`ls-user-type-btn ${userType === type ? "active" : ""
+                            }`}
                           onClick={() => handleUserTypeChange(type)}
                         >
                           {type.charAt(0).toUpperCase() + type.slice(1)}
@@ -558,9 +556,8 @@ const LoginSignUp = () => {
                             <input
                               type="text"
                               id="name"
-                              className={`ls-form-input ${
-                                errors.name ? "error" : ""
-                              }`}
+                              className={`ls-form-input ${errors.name ? "error" : ""
+                                }`}
                               value={signupData.name}
                               onChange={(e) => handleInputChange(e, "signup")}
                               required
@@ -579,9 +576,8 @@ const LoginSignUp = () => {
                             <input
                               type="text"
                               id="companyName"
-                              className={`ls-form-input ${
-                                errors.companyName ? "error" : ""
-                              }`}
+                              className={`ls-form-input ${errors.companyName ? "error" : ""
+                                }`}
                               value={signupData.companyName}
                               onChange={(e) => handleInputChange(e, "signup")}
                               required
@@ -597,9 +593,8 @@ const LoginSignUp = () => {
                             <input
                               type="text"
                               id="contactPerson"
-                              className={`ls-form-input ${
-                                errors.contactPerson ? "error" : ""
-                              }`}
+                              className={`ls-form-input ${errors.contactPerson ? "error" : ""
+                                }`}
                               value={signupData.contactPerson}
                               onChange={(e) => handleInputChange(e, "signup")}
                               required
@@ -616,9 +611,8 @@ const LoginSignUp = () => {
                         <input
                           type="email"
                           id="email"
-                          className={`ls-form-input ${
-                            errors.email ? "error" : ""
-                          }`}
+                          className={`ls-form-input ${errors.email ? "error" : ""
+                            }`}
                           value={signupData.email}
                           onChange={(e) => handleInputChange(e, "signup")}
                           required
@@ -634,9 +628,8 @@ const LoginSignUp = () => {
                           <input
                             type="date"
                             id="dob"
-                            className={`ls-form-input ${
-                              errors.dob ? "error" : ""
-                            }`}
+                            className={`ls-form-input ${errors.dob ? "error" : ""
+                              }`}
                             value={signupData.dob}
                             onChange={(e) => handleInputChange(e, "signup")}
                             required
@@ -650,9 +643,8 @@ const LoginSignUp = () => {
                         <input
                           type="tel"
                           id="phone"
-                          className={`ls-form-input ${
-                            errors.phone ? "error" : ""
-                          }`}
+                          className={`ls-form-input ${errors.phone ? "error" : ""
+                            }`}
                           value={signupData.phone}
                           onChange={(e) => handleInputChange(e, "signup")}
                           required
@@ -663,63 +655,60 @@ const LoginSignUp = () => {
                       {userType === "worker" && (
                         <>
                           <div className="ls-worker-details">
-                          <div className="ls-form-group">
-                            <label htmlFor="aadharNumber">Aadhar Number</label>
-                            <input
-                              type="text"
-                              id="aadharNumber"
-                              className={`ls-form-input ${
-                                errors.aadharNumber ? "error" : ""
-                              }`}
-                              value={signupData.aadharNumber}
-                              onChange={(e) => handleInputChange(e, "signup")}
-                              required
-                            />
-                            <div className="ls-error-message">
-                              {errors.aadharNumber}
+                            <div className="ls-form-group">
+                              <label htmlFor="aadharNumber">Aadhar Number</label>
+                              <input
+                                type="text"
+                                id="aadharNumber"
+                                className={`ls-form-input ${errors.aadharNumber ? "error" : ""
+                                  }`}
+                                value={signupData.aadharNumber}
+                                onChange={(e) => handleInputChange(e, "signup")}
+                                required
+                              />
+                              <div className="ls-error-message">
+                                {errors.aadharNumber}
+                              </div>
                             </div>
-                          </div>
-                          <div className="ls-form-group">
-                            <label htmlFor="specialization">
-                              Specialization
-                            </label>
-                            <select
-                              id="specialization"
-                              className={`ls-form-input ls-select ${
-                                errors.specialization ? "error" : ""
-                              }`}
-                              value={signupData.specialization}
-                              onChange={(e) => handleInputChange(e, "signup")}
-                              required
-                            >
-                              <option value="">Select Specialization</option>
-                              <option value="architect">Architect</option>
-                              <option value="interiordesign">
-                                Interior Design
-                              </option>
-                            </select>
-                            <div className="ls-error-message">
-                              {errors.specialization}
+                            <div className="ls-form-group">
+                              <label htmlFor="specialization">
+                                Specialization
+                              </label>
+                              <select
+                                id="specialization"
+                                className={`ls-form-input ls-select ${errors.specialization ? "error" : ""
+                                  }`}
+                                value={signupData.specialization}
+                                onChange={(e) => handleInputChange(e, "signup")}
+                                required
+                              >
+                                <option value="">Select Specialization</option>
+                                <option value="architect">Architect</option>
+                                <option value="interiordesign">
+                                  Interior Design
+                                </option>
+                              </select>
+                              <div className="ls-error-message">
+                                {errors.specialization}
+                              </div>
                             </div>
-                          </div>
-                          <div className="ls-form-group">
-                            <label htmlFor="experience">
-                              Experience (years)
-                            </label>
-                            <input
-                              type="number"
-                              id="experience"
-                              className={`ls-form-input ${
-                                errors.experience ? "error" : ""
-                              }`}
-                              value={signupData.experience}
-                              onChange={(e) => handleInputChange(e, "signup")}
-                              min="0"
-                            />
-                            <div className="ls-error-message">
-                              {errors.experience}
+                            <div className="ls-form-group">
+                              <label htmlFor="experience">
+                                Experience (years)
+                              </label>
+                              <input
+                                type="number"
+                                id="experience"
+                                className={`ls-form-input ${errors.experience ? "error" : ""
+                                  }`}
+                                value={signupData.experience}
+                                onChange={(e) => handleInputChange(e, "signup")}
+                                min="0"
+                              />
+                              <div className="ls-error-message">
+                                {errors.experience}
+                              </div>
                             </div>
-                          </div>
                           </div>
                         </>
                       )}
@@ -732,9 +721,8 @@ const LoginSignUp = () => {
                       <input
                         type="password"
                         id="password"
-                        className={`ls-form-input ${
-                          errors.password ? "error" : ""
-                        }`}
+                        className={`ls-form-input ${errors.password ? "error" : ""
+                          }`}
                         value={signupData.password}
                         onChange={(e) => handleInputChange(e, "signup")}
                         required
@@ -746,9 +734,8 @@ const LoginSignUp = () => {
                       <input
                         type="password"
                         id="confirmPassword"
-                        className={`ls-form-input ${
-                          errors.confirmPassword ? "error" : ""
-                        }`}
+                        className={`ls-form-input ${errors.confirmPassword ? "error" : ""
+                          }`}
                         value={signupData.confirmPassword}
                         onChange={(e) => handleInputChange(e, "signup")}
                         required
