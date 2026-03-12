@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import ProjectCard from './components/ProjectCard';
-import DetailsModal from './components/DetailsModal';
-import ProposalModal from './components/ProposalModal';
+import ProjectCard from "./components/ProjectCard";
+import DetailsModal from "./components/DetailsModal";
+import ProposalModal from "./components/ProposalModal";
 import "./CompanyProjectRequests.css";
 
 const CompanyProjectRequests = () => {
@@ -56,7 +56,9 @@ const CompanyProjectRequests = () => {
       rejected: "Rejected",
       proposal_sent: "Proposal Sent",
     };
-    return statusMap[status] || status.charAt(0).toUpperCase() + status.slice(1);
+    return (
+      statusMap[status] || status.charAt(0).toUpperCase() + status.slice(1)
+    );
   };
 
   const handleViewDetails = (project) => {
@@ -133,17 +135,21 @@ const CompanyProjectRequests = () => {
       // Prepare the submission data with phases
       const submissionData = {
         projectId: proposalDataWithPhases.projectId || proposalData.projectId,
-        price: proposalDataWithPhases.totalAmount || proposalDataWithPhases.price,
+        price:
+          proposalDataWithPhases.totalAmount || proposalDataWithPhases.price,
         description: proposalDataWithPhases.description || "",
         phases: proposalDataWithPhases.phases || [],
       };
 
-      const res = await fetch("http://localhost:3000/api/company/submit-proposal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(submissionData),
-      });
+      const res = await fetch(
+        "http://localhost:3000/api/company/submit-proposal",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(submissionData),
+        },
+      );
 
       if (!res.ok) {
         const errorData = await res.json();
@@ -165,12 +171,13 @@ const CompanyProjectRequests = () => {
     }
 
     try {
-      const res = await fetch(`http://localhost:3000/api/projects/${projectId}/rejected`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ status: "rejected" }),
-      });
+      const res = await fetch(
+        `http://localhost:3000/api/projects/${projectId}/rejected`,
+        {
+          method: "PATCH",
+          credentials: "include",
+        },
+      );
 
       if (!res.ok) {
         const errorData = await res.json();

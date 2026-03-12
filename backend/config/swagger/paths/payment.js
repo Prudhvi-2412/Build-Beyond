@@ -1,9 +1,36 @@
 module.exports = {
+  "/api/payment/initialize-escrow": {
+    post: {
+      tags: ["payment"],
+      summary: "Initialize escrow tracking for a project payment flow",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["projectId", "projectType"],
+              properties: {
+                projectId: { type: "string" },
+                projectType: {
+                  type: "string",
+                  enum: ["architect", "interior"],
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "Escrow initialized" },
+        400: { $ref: "#/components/responses/BadRequest" },
+      },
+    },
+  },
   "/api/payment/worker/create-order": {
     post: {
       tags: ["payment"],
       summary: "Create Razorpay order for worker deposit or milestone",
-      security: [{ cookieAuth: [] }],
       requestBody: {
         required: true,
         content: {
@@ -13,9 +40,15 @@ module.exports = {
               required: ["projectId", "projectType", "paymentType"],
               properties: {
                 projectId: { type: "string" },
-                projectType: { type: "string", enum: ["architect", "interior"] },
+                projectType: {
+                  type: "string",
+                  enum: ["architect", "interior"],
+                },
                 paymentType: { type: "string", enum: ["deposit", "milestone"] },
-                milestonePercentage: { type: "number", enum: [25, 50, 75, 100] },
+                milestonePercentage: {
+                  type: "number",
+                  enum: [25, 50, 75, 100],
+                },
               },
             },
           },
@@ -24,7 +57,6 @@ module.exports = {
       responses: {
         200: { description: "Order created" },
         400: { $ref: "#/components/responses/BadRequest" },
-        401: { $ref: "#/components/responses/Unauthorized" },
       },
     },
   },
@@ -32,7 +64,6 @@ module.exports = {
     post: {
       tags: ["payment"],
       summary: "Verify worker Razorpay payment and collect escrow funds",
-      security: [{ cookieAuth: [] }],
       requestBody: {
         required: true,
         content: {
@@ -49,9 +80,15 @@ module.exports = {
               ],
               properties: {
                 projectId: { type: "string" },
-                projectType: { type: "string", enum: ["architect", "interior"] },
+                projectType: {
+                  type: "string",
+                  enum: ["architect", "interior"],
+                },
                 paymentType: { type: "string", enum: ["deposit", "milestone"] },
-                milestonePercentage: { type: "number", enum: [25, 50, 75, 100] },
+                milestonePercentage: {
+                  type: "number",
+                  enum: [25, 50, 75, 100],
+                },
                 razorpay_order_id: { type: "string" },
                 razorpay_payment_id: { type: "string" },
                 razorpay_signature: { type: "string" },
@@ -63,6 +100,127 @@ module.exports = {
       responses: {
         200: { description: "Payment verified and escrow updated" },
         400: { $ref: "#/components/responses/BadRequest" },
+      },
+    },
+  },
+  "/api/payment/collect-milestone": {
+    post: {
+      tags: ["payment"],
+      summary: "Collect milestone payment into escrow",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["projectId", "projectType", "milestonePercentage"],
+              properties: {
+                projectId: { type: "string" },
+                projectType: {
+                  type: "string",
+                  enum: ["architect", "interior"],
+                },
+                milestonePercentage: {
+                  type: "number",
+                  enum: [25, 50, 75, 100],
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "Milestone collected" },
+        400: { $ref: "#/components/responses/BadRequest" },
+      },
+    },
+  },
+  "/api/payment/release-milestone": {
+    post: {
+      tags: ["payment"],
+      summary: "Release escrowed milestone payment",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["projectId", "projectType", "milestonePercentage"],
+              properties: {
+                projectId: { type: "string" },
+                projectType: {
+                  type: "string",
+                  enum: ["architect", "interior"],
+                },
+                milestonePercentage: {
+                  type: "number",
+                  enum: [25, 50, 75, 100],
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "Milestone released" },
+        400: { $ref: "#/components/responses/BadRequest" },
+      },
+    },
+  },
+  "/api/payment/worker/earnings": {
+    get: {
+      tags: ["payment"],
+      summary: "Get worker earnings summary",
+      security: [{ cookieAuth: [] }],
+      responses: {
+        200: { description: "Worker earnings retrieved" },
+        401: { $ref: "#/components/responses/Unauthorized" },
+      },
+    },
+  },
+  "/api/payment/worker/withdraw": {
+    post: {
+      tags: ["payment"],
+      summary: "Request worker withdrawal",
+      security: [{ cookieAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["amount", "bankDetails"],
+              properties: {
+                amount: { type: "number" },
+                bankDetails: {
+                  type: "object",
+                  required: ["accountNumber", "ifscCode"],
+                  properties: {
+                    accountHolderName: { type: "string" },
+                    accountNumber: { type: "string" },
+                    ifscCode: { type: "string" },
+                    bankName: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "Withdrawal request submitted" },
+        400: { $ref: "#/components/responses/BadRequest" },
+        401: { $ref: "#/components/responses/Unauthorized" },
+      },
+    },
+  },
+  "/api/payment/worker/transactions": {
+    get: {
+      tags: ["payment"],
+      summary: "Get worker transaction history",
+      security: [{ cookieAuth: [] }],
+      responses: {
+        200: { description: "Transaction history retrieved" },
         401: { $ref: "#/components/responses/Unauthorized" },
       },
     },
@@ -70,8 +228,8 @@ module.exports = {
   "/api/payment/company/create-order": {
     post: {
       tags: ["payment"],
-      summary: "Create Razorpay order for company phase payment (75/25 split, 5% platform fee)",
-      security: [{ cookieAuth: [] }],
+      summary:
+        "Create Razorpay order for company phase payment (75/25 split, 5% platform fee)",
       requestBody: {
         required: true,
         content: {
@@ -81,7 +239,10 @@ module.exports = {
               required: ["projectId", "milestonePercentage"],
               properties: {
                 projectId: { type: "string" },
-                milestonePercentage: { type: "number", enum: [25, 50, 75, 100] },
+                milestonePercentage: {
+                  type: "number",
+                  enum: [25, 50, 75, 100],
+                },
               },
             },
           },
@@ -90,7 +251,6 @@ module.exports = {
       responses: {
         200: { description: "Razorpay order created" },
         400: { $ref: "#/components/responses/BadRequest" },
-        401: { $ref: "#/components/responses/Unauthorized" },
       },
     },
   },
@@ -98,17 +258,25 @@ module.exports = {
     post: {
       tags: ["payment"],
       summary: "Verify company Razorpay payment and release initial 75%",
-      security: [{ cookieAuth: [] }],
       requestBody: {
         required: true,
         content: {
           "application/json": {
             schema: {
               type: "object",
-              required: ["projectId", "razorpay_order_id", "razorpay_payment_id", "razorpay_signature"],
+              required: [
+                "projectId",
+                "milestonePercentage",
+                "razorpay_order_id",
+                "razorpay_payment_id",
+                "razorpay_signature",
+              ],
               properties: {
                 projectId: { type: "string" },
-                milestonePercentage: { type: "number", enum: [25, 50, 75, 100] },
+                milestonePercentage: {
+                  type: "number",
+                  enum: [25, 50, 75, 100],
+                },
                 razorpay_order_id: { type: "string" },
                 razorpay_payment_id: { type: "string" },
                 razorpay_signature: { type: "string" },
@@ -120,7 +288,35 @@ module.exports = {
       responses: {
         200: { description: "Payment verified" },
         400: { $ref: "#/components/responses/BadRequest" },
-        401: { $ref: "#/components/responses/Unauthorized" },
+      },
+    },
+  },
+  "/api/payment/company/test-mark-paid": {
+    post: {
+      tags: ["payment"],
+      summary: "Test-mode mark installment as paid",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["projectId", "milestonePercentage"],
+              properties: {
+                projectId: { type: "string" },
+                milestonePercentage: {
+                  type: "number",
+                  enum: [25, 50, 75, 100],
+                },
+                testAmount: { type: "number" },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "Installment marked paid in test mode" },
+        400: { $ref: "#/components/responses/BadRequest" },
       },
     },
   },
@@ -128,6 +324,34 @@ module.exports = {
     post: {
       tags: ["payment"],
       summary: "Release held 25% to company and mark platform fee due",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["projectId", "milestonePercentage"],
+              properties: {
+                projectId: { type: "string" },
+                milestonePercentage: {
+                  type: "number",
+                  enum: [25, 50, 75, 100],
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "Milestone released" },
+        400: { $ref: "#/components/responses/BadRequest" },
+      },
+    },
+  },
+  "/api/payment/company/platform-fee/create-order": {
+    post: {
+      tags: ["payment"],
+      summary: "Create platform fee payment order for company",
       security: [{ cookieAuth: [] }],
       requestBody: {
         required: true,
@@ -138,14 +362,87 @@ module.exports = {
               required: ["projectId", "milestonePercentage"],
               properties: {
                 projectId: { type: "string" },
-                milestonePercentage: { type: "number", enum: [25, 50, 75, 100] },
+                milestonePercentage: {
+                  type: "number",
+                  enum: [25, 50, 75, 100],
+                },
               },
             },
           },
         },
       },
       responses: {
-        200: { description: "Milestone released" },
+        200: { description: "Platform fee order created" },
+        400: { $ref: "#/components/responses/BadRequest" },
+        401: { $ref: "#/components/responses/Unauthorized" },
+      },
+    },
+  },
+  "/api/payment/company/platform-fee/verify-payment": {
+    post: {
+      tags: ["payment"],
+      summary: "Verify company platform fee payment",
+      security: [{ cookieAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: [
+                "projectId",
+                "milestonePercentage",
+                "razorpay_order_id",
+                "razorpay_payment_id",
+                "razorpay_signature",
+              ],
+              properties: {
+                projectId: { type: "string" },
+                milestonePercentage: {
+                  type: "number",
+                  enum: [25, 50, 75, 100],
+                },
+                razorpay_order_id: { type: "string" },
+                razorpay_payment_id: { type: "string" },
+                razorpay_signature: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "Platform fee payment verified" },
+        400: { $ref: "#/components/responses/BadRequest" },
+        401: { $ref: "#/components/responses/Unauthorized" },
+      },
+    },
+  },
+  "/api/payment/company/platform-fee/test-mark-paid": {
+    post: {
+      tags: ["payment"],
+      summary: "Test-mode mark company platform fee as paid",
+      security: [{ cookieAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["projectId", "milestonePercentage"],
+              properties: {
+                projectId: { type: "string" },
+                milestonePercentage: {
+                  type: "number",
+                  enum: [25, 50, 75, 100],
+                },
+                testAmount: { type: "number" },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "Platform fee marked paid in test mode" },
         400: { $ref: "#/components/responses/BadRequest" },
         401: { $ref: "#/components/responses/Unauthorized" },
       },
@@ -155,7 +452,6 @@ module.exports = {
     get: {
       tags: ["payment"],
       summary: "Get company project payment summary",
-      security: [{ cookieAuth: [] }],
       parameters: [
         {
           name: "projectId",
@@ -166,7 +462,6 @@ module.exports = {
       ],
       responses: {
         200: { description: "Payment summary" },
-        401: { $ref: "#/components/responses/Unauthorized" },
         404: { description: "Not found" },
       },
     },

@@ -1,7 +1,7 @@
 module.exports = {
-  "/api/project/architect_submit": {
+  "/api/architect_submit": {
     post: {
-      tags: ["project"],
+      tags: ["project-customer-accessed"],
       summary: "Submit architect hiring request",
       security: [{ cookieAuth: [] }],
       requestBody: {
@@ -10,13 +10,51 @@ module.exports = {
           "multipart/form-data": {
             schema: {
               type: "object",
-              required: ["projectName", "description"],
+              required: [
+                "projectName",
+                "fullName",
+                "contactNumber",
+                "email",
+                "streetAddress",
+                "city",
+                "state",
+                "zipCode",
+                "plotLocation",
+                "plotSize",
+                "plotOrientation",
+                "designType",
+                "numFloors",
+                "specialFeatures",
+                "architecturalStyle",
+                "budget",
+              ],
               properties: {
                 projectName: { type: "string" },
-                description: { type: "string" },
+                fullName: { type: "string" },
+                contactNumber: { type: "string" },
+                email: { type: "string", format: "email" },
+                streetAddress: { type: "string" },
+                city: { type: "string" },
+                state: { type: "string" },
+                zipCode: { type: "string" },
+                plotLocation: { type: "string" },
+                plotSize: { type: "string" },
+                plotOrientation: { type: "string" },
+                designType: { type: "string" },
+                numFloors: { type: "integer", minimum: 1 },
+                floorRequirements: {
+                  type: "string",
+                  description: "JSON stringified floor requirements array",
+                },
+                specialFeatures: { type: "string" },
+                architecturalStyle: { type: "string" },
                 budget: { type: "number" },
-                timeline: { type: "string" },
-                referenceImages: { type: "array", items: { type: "string", format: "binary" } },
+                completionDate: { type: "string", format: "date" },
+                workerId: { type: "string" },
+                referenceImages: {
+                  type: "array",
+                  items: { type: "string", format: "binary" },
+                },
               },
             },
           },
@@ -29,9 +67,9 @@ module.exports = {
       },
     },
   },
-  "/api/project/design_request": {
+  "/api/design_request": {
     post: {
-      tags: ["project"],
+      tags: ["project-customer-accessed"],
       summary: "Submit design request (interior/graphic)",
       security: [{ cookieAuth: [] }],
       requestBody: {
@@ -40,12 +78,40 @@ module.exports = {
           "multipart/form-data": {
             schema: {
               type: "object",
-              required: ["designType", "description"],
+              required: [
+                "projectName",
+                "fullName",
+                "email",
+                "phone",
+                "address",
+                "roomType",
+                "roomLength",
+                "roomWidth",
+                "dimensionUnit",
+              ],
               properties: {
-                designType: { type: "string", enum: ["interior", "graphic"] },
-                description: { type: "string" },
-                budget: { type: "number" },
-                deadline: { type: "string", format: "date" },
+                projectName: { type: "string" },
+                fullName: { type: "string" },
+                email: { type: "string", format: "email" },
+                phone: { type: "string" },
+                address: { type: "string" },
+                roomType: { type: "string" },
+                roomLength: { type: "number" },
+                roomWidth: { type: "number" },
+                dimensionUnit: { type: "string" },
+                ceilingHeight: { type: "number" },
+                heightUnit: { type: "string" },
+                designPreference: { type: "string" },
+                projectDescription: { type: "string" },
+                workerId: { type: "string" },
+                currentRoomImages: {
+                  type: "array",
+                  items: { type: "string", format: "binary" },
+                },
+                inspirationImages: {
+                  type: "array",
+                  items: { type: "string", format: "binary" },
+                },
               },
             },
           },
@@ -58,10 +124,11 @@ module.exports = {
       },
     },
   },
-  "/api/project/construction_form": {
+  "/api/construction_form": {
     post: {
-      tags: ["project"],
-      summary: "Submit construction project form",
+      tags: ["project-customer-accessed"],
+      summary:
+        "Submit construction project form with company details and floor specifications",
       security: [{ cookieAuth: [] }],
       requestBody: {
         required: true,
@@ -69,43 +136,153 @@ module.exports = {
           "multipart/form-data": {
             schema: {
               type: "object",
-              required: ["projectName", "description", "location"],
+              required: [
+                "projectName",
+                "customerName",
+                "customerEmail",
+                "customerPhone",
+                "projectAddress",
+                "projectLocation",
+                "totalArea",
+                "buildingType",
+                "totalFloors",
+                "companyId",
+              ],
               properties: {
-                projectName: { type: "string" },
-                description: { type: "string" },
-                location: { type: "string" },
-                budget: { type: "number" },
-                startDate: { type: "string", format: "date" },
-                endDate: { type: "string", format: "date" },
+                projectName: {
+                  type: "string",
+                  description: "Name of the construction project",
+                },
+                customerName: {
+                  type: "string",
+                  description: "Full name of the customer",
+                },
+                customerEmail: {
+                  type: "string",
+                  format: "email",
+                  description: "Email address of the customer",
+                },
+                customerPhone: {
+                  type: "string",
+                  description: "Phone number of the customer",
+                },
+                projectAddress: {
+                  type: "string",
+                  description: "Full address of the project site",
+                },
+                projectLocation: {
+                  type: "string",
+                  description: "Pincode or location identifier of the project",
+                },
+                totalArea: {
+                  type: "number",
+                  description: "Total area of the project in square meters",
+                },
+                buildingType: {
+                  type: "string",
+                  enum: [
+                    "residential",
+                    "commercial",
+                    "industrial",
+                    "mixedUse",
+                    "other",
+                  ],
+                  description: "Type of building",
+                },
+                totalFloors: {
+                  type: "number",
+                  description: "Total number of floors",
+                  minimum: 1,
+                },
+                companyId: {
+                  type: "string",
+                  description: "ObjectId of the construction company",
+                },
+                estimatedBudget: {
+                  type: "number",
+                  description: "Estimated budget for the project (optional)",
+                },
+                projectTimeline: {
+                  type: "number",
+                  description: "Project timeline in months (optional)",
+                },
+                specialRequirements: {
+                  type: "string",
+                  description: "Any special requirements or notes (optional)",
+                },
+                accessibilityNeeds: {
+                  type: "string",
+                  enum: ["wheelchair", "elevators", "ramps", "other", "none"],
+                  description: "Accessibility requirements (optional)",
+                },
+                energyEfficiency: {
+                  type: "string",
+                  enum: ["standard", "leed", "passive", "netZero", "other"],
+                  description: "Energy efficiency standards (optional)",
+                },
+                "floorType-{i}": {
+                  type: "string",
+                  description:
+                    "Type of floor i (e.g., residential, commercial, parking)",
+                },
+                "floorArea-{i}": {
+                  type: "number",
+                  description: "Area of floor i in square meters",
+                },
+                "floorDescription-{i}": {
+                  type: "string",
+                  description: "Description of floor i",
+                },
+                "floorImage-{i}": {
+                  type: "string",
+                  format: "binary",
+                  description: "Image file for floor i",
+                },
+                siteFiles: {
+                  type: "array",
+                  items: { type: "string", format: "binary" },
+                  description:
+                    "Site plan, architectural plans, or other documents",
+                },
               },
             },
           },
         },
       },
       responses: {
-        201: { description: "Construction project submitted successfully" },
+        201: {
+          description: "Construction project submitted successfully",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  success: { type: "boolean" },
+                  message: { type: "string" },
+                  projectId: { type: "string" },
+                },
+              },
+            },
+          },
+        },
         400: { $ref: "#/components/responses/BadRequest" },
         401: { $ref: "#/components/responses/Unauthorized" },
+        500: { description: "Error submitting project" },
       },
     },
   },
-  "/api/project/projects": {
+  "/api/projects": {
     get: {
-      tags: ["project"],
+      tags: ["project-company-accessed"],
       summary: "Get all projects (public)",
-      parameters: [
-        { name: "skip", in: "query", schema: { type: "number" } },
-        { name: "limit", in: "query", schema: { type: "number" } },
-        { name: "projectType", in: "query", schema: { type: "string" } },
-      ],
       responses: {
         200: { description: "Projects list retrieved" },
       },
     },
   },
-  "/api/project/projects/{id}": {
+  "/api/projects/{id}": {
     get: {
-      tags: ["project"],
+      tags: ["project-company-accessed"],
       summary: "Get project details by ID",
       parameters: [
         { name: "id", in: "path", required: true, schema: { type: "string" } },
@@ -116,9 +293,9 @@ module.exports = {
       },
     },
   },
-  "/api/project/edit-project/{id}": {
+  "/api/edit-project/{id}": {
     get: {
-      tags: ["project"],
+      tags: ["project-company-accessed"],
       summary: "Get project details for editing",
       security: [{ cookieAuth: [] }],
       parameters: [
@@ -131,25 +308,34 @@ module.exports = {
       },
     },
   },
-  "/api/project/projects/update": {
+  "/api/projects/update": {
     post: {
-      tags: ["project"],
+      tags: ["project-company-accessed"],
       summary: "Update project details",
-      security: [{ cookieAuth: [] }],
       requestBody: {
         required: true,
         content: {
           "multipart/form-data": {
             schema: {
               type: "object",
+              required: ["projectId"],
               properties: {
                 projectId: { type: "string" },
                 projectName: { type: "string" },
                 description: { type: "string" },
                 mainImage: { type: "string", format: "binary" },
-                additionalImages: { type: "array", items: { type: "string", format: "binary" } },
-                completionImages: { type: "array", items: { type: "string", format: "binary" } },
-                updateImages: { type: "array", items: { type: "string", format: "binary" } },
+                additionalImages: {
+                  type: "array",
+                  items: { type: "string", format: "binary" },
+                },
+                completionImages: {
+                  type: "array",
+                  items: { type: "string", format: "binary" },
+                },
+                updateImages: {
+                  type: "array",
+                  items: { type: "string", format: "binary" },
+                },
               },
             },
           },
@@ -158,13 +344,12 @@ module.exports = {
       responses: {
         200: { description: "Project updated successfully" },
         400: { $ref: "#/components/responses/BadRequest" },
-        401: { $ref: "#/components/responses/Unauthorized" },
       },
     },
   },
-  "/api/project/customer/submit-bid": {
+  "/api/customer/submit-bid": {
     post: {
-      tags: ["project"],
+      tags: ["project-customer-accessed"],
       summary: "Customer submits bid for project",
       security: [{ cookieAuth: [] }],
       requestBody: {
@@ -173,10 +358,10 @@ module.exports = {
           "application/json": {
             schema: {
               type: "object",
-              required: ["projectId", "bidAmount"],
+              required: ["bidId", "bidPrice"],
               properties: {
-                projectId: { type: "string" },
-                bidAmount: { type: "number" },
+                bidId: { type: "string" },
+                bidPrice: { type: "number" },
               },
             },
           },
@@ -189,9 +374,9 @@ module.exports = {
       },
     },
   },
-  "/api/project/customer/accept-bid": {
+  "/api/customer/accept-bid": {
     post: {
-      tags: ["project"],
+      tags: ["project-customer-accessed"],
       summary: "Customer accepts a bid",
       security: [{ cookieAuth: [] }],
       requestBody: {
@@ -200,9 +385,10 @@ module.exports = {
           "application/json": {
             schema: {
               type: "object",
-              required: ["bidId"],
+              required: ["bidId", "companyBidId"],
               properties: {
                 bidId: { type: "string" },
+                companyBidId: { type: "string" },
               },
             },
           },
@@ -215,9 +401,9 @@ module.exports = {
       },
     },
   },
-  "/api/project/customer/decline-bid": {
+  "/api/customer/decline-bid": {
     post: {
-      tags: ["project"],
+      tags: ["project-customer-accessed"],
       summary: "Customer declines a bid",
       security: [{ cookieAuth: [] }],
       requestBody: {
@@ -226,9 +412,10 @@ module.exports = {
           "application/json": {
             schema: {
               type: "object",
-              required: ["bidId"],
+              required: ["bidId", "companyBidId"],
               properties: {
                 bidId: { type: "string" },
+                companyBidId: { type: "string" },
               },
             },
           },
@@ -241,9 +428,9 @@ module.exports = {
       },
     },
   },
-  "/api/project/customer/approve-milestone": {
+  "/api/customer/approve-milestone": {
     post: {
-      tags: ["project"],
+      tags: ["project-customer-accessed"],
       summary: "Customer approves milestone",
       security: [{ cookieAuth: [] }],
       requestBody: {
@@ -252,10 +439,13 @@ module.exports = {
           "application/json": {
             schema: {
               type: "object",
-              required: ["projectId", "milestoneId"],
+              required: ["projectId", "milestonePercentage"],
               properties: {
                 projectId: { type: "string" },
-                milestoneId: { type: "string" },
+                milestonePercentage: {
+                  type: "number",
+                  enum: [25, 50, 75, 100],
+                },
               },
             },
           },
@@ -268,9 +458,9 @@ module.exports = {
       },
     },
   },
-  "/api/project/customer/request-milestone-revision": {
+  "/api/customer/request-milestone-revision": {
     post: {
-      tags: ["project"],
+      tags: ["project-customer-accessed"],
       summary: "Customer requests milestone revision",
       security: [{ cookieAuth: [] }],
       requestBody: {
@@ -279,11 +469,14 @@ module.exports = {
           "application/json": {
             schema: {
               type: "object",
-              required: ["projectId", "milestoneId", "reason"],
+              required: ["projectId", "milestonePercentage", "feedback"],
               properties: {
                 projectId: { type: "string" },
-                milestoneId: { type: "string" },
-                reason: { type: "string" },
+                milestonePercentage: {
+                  type: "number",
+                  enum: [25, 50, 75, 100],
+                },
+                feedback: { type: "string" },
               },
             },
           },
@@ -296,9 +489,9 @@ module.exports = {
       },
     },
   },
-  "/api/project/customer/pay-milestone": {
+  "/api/customer/pay-milestone": {
     post: {
-      tags: ["project"],
+      tags: ["project-customer-accessed"],
       summary: "Customer pays for milestone",
       security: [{ cookieAuth: [] }],
       requestBody: {
@@ -307,10 +500,17 @@ module.exports = {
           "application/json": {
             schema: {
               type: "object",
-              required: ["projectId", "milestoneId"],
+              required: ["projectId", "milestonePercentage", "paymentStage"],
               properties: {
                 projectId: { type: "string" },
-                milestoneId: { type: "string" },
+                milestonePercentage: {
+                  type: "number",
+                  enum: [25, 50, 75, 100],
+                },
+                paymentStage: {
+                  type: "string",
+                  enum: ["upfront", "completion", "final"],
+                },
               },
             },
           },
@@ -323,9 +523,9 @@ module.exports = {
       },
     },
   },
-  "/api/project/company/unviewed-customer-messages": {
+  "/api/company/unviewed-customer-messages": {
     get: {
-      tags: ["project"],
+      tags: ["project-company-accessed"],
       summary: "Get projects with unviewed customer messages (company view)",
       security: [{ cookieAuth: [] }],
       responses: {
@@ -334,13 +534,18 @@ module.exports = {
       },
     },
   },
-  "/api/project/company/mark-messages-viewed/{projectId}": {
+  "/api/company/mark-messages-viewed/{projectId}": {
     post: {
-      tags: ["project"],
+      tags: ["project-company-accessed"],
       summary: "Mark customer messages as viewed (company)",
       security: [{ cookieAuth: [] }],
       parameters: [
-        { name: "projectId", in: "path", required: true, schema: { type: "string" } },
+        {
+          name: "projectId",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
       ],
       responses: {
         200: { description: "Messages marked as viewed" },
@@ -348,9 +553,9 @@ module.exports = {
       },
     },
   },
-  "/api/project/customer/unviewed-company-messages": {
+  "/api/customer/unviewed-company-messages": {
     get: {
-      tags: ["project"],
+      tags: ["project-customer-accessed"],
       summary: "Get projects with unviewed company messages (customer view)",
       security: [{ cookieAuth: [] }],
       responses: {
@@ -359,13 +564,18 @@ module.exports = {
       },
     },
   },
-  "/api/project/customer/mark-messages-viewed/{projectId}": {
+  "/api/customer/mark-messages-viewed/{projectId}": {
     post: {
-      tags: ["project"],
+      tags: ["project-customer-accessed"],
       summary: "Mark company messages as viewed (customer)",
       security: [{ cookieAuth: [] }],
       parameters: [
-        { name: "projectId", in: "path", required: true, schema: { type: "string" } },
+        {
+          name: "projectId",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
       ],
       responses: {
         200: { description: "Messages marked as viewed" },
@@ -373,9 +583,9 @@ module.exports = {
       },
     },
   },
-  "/api/project/customer/submit-project-review": {
+  "/api/customer/submit-project-review": {
     post: {
-      tags: ["project"],
+      tags: ["project-customer-accessed"],
       summary: "Customer submits project review",
       security: [{ cookieAuth: [] }],
       requestBody: {
@@ -384,11 +594,11 @@ module.exports = {
           "application/json": {
             schema: {
               type: "object",
-              required: ["projectId", "rating", "comment"],
+              required: ["projectId", "rating"],
               properties: {
                 projectId: { type: "string" },
                 rating: { type: "number", minimum: 1, maximum: 5 },
-                comment: { type: "string" },
+                reviewText: { type: "string" },
               },
             },
           },
@@ -401,9 +611,9 @@ module.exports = {
       },
     },
   },
-  "/api/project/company/worker-request/accept": {
+  "/api/company/worker-request/accept": {
     post: {
-      tags: ["project"],
+      tags: ["project-company-accessed"],
       summary: "Company accepts worker request",
       security: [{ cookieAuth: [] }],
       requestBody: {
@@ -427,9 +637,9 @@ module.exports = {
       },
     },
   },
-  "/api/project/company/worker-request/reject": {
+  "/api/company/worker-request/reject": {
     post: {
-      tags: ["project"],
+      tags: ["project-company-accessed"],
       summary: "Company rejects worker request",
       security: [{ cookieAuth: [] }],
       requestBody: {

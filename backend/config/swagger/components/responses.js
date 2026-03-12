@@ -3,7 +3,13 @@ module.exports = {
     description: "Bad request",
     content: {
       "application/json": {
-        schema: { $ref: "#/components/schemas/ErrorResponse" },
+        schema: {
+          type: "object",
+          properties: {
+            message: { type: "string" },
+            error: { type: "string" },
+          },
+        },
       },
     },
   },
@@ -11,7 +17,13 @@ module.exports = {
     description: "Unauthorized",
     content: {
       "application/json": {
-        schema: { $ref: "#/components/schemas/ErrorResponse" },
+        schema: {
+          type: "object",
+          properties: {
+            message: { type: "string" },
+            error: { type: "string" },
+          },
+        },
       },
     },
   },

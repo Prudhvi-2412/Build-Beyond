@@ -9,9 +9,18 @@ module.exports = {
           "multipart/form-data": {
             schema: {
               type: "object",
-              required: ["role", "email", "password", "termsAccepted", "emailVerificationToken"],
+              required: [
+                "role",
+                "email",
+                "password",
+                "termsAccepted",
+                "emailVerificationToken",
+              ],
               properties: {
-                role: { type: "string", enum: ["customer", "company", "worker"] },
+                role: {
+                  type: "string",
+                  enum: ["customer", "company", "worker"],
+                },
                 email: { type: "string", format: "email" },
                 password: { type: "string", minLength: 8 },
                 termsAccepted: { type: "boolean" },
@@ -40,7 +49,14 @@ module.exports = {
         required: true,
         content: {
           "application/json": {
-            schema: { $ref: "#/components/schemas/LoginRequest" },
+            schema: {
+              type: "object",
+              required: ["email", "password"],
+              properties: {
+                email: { type: "string", format: "email" },
+                password: { type: "string" },
+              },
+            },
           },
         },
       },
@@ -51,9 +67,69 @@ module.exports = {
             "application/json": {
               schema: {
                 oneOf: [
-                  { $ref: "#/components/schemas/LoginSuccessResponse" },
-                  { $ref: "#/components/schemas/LoginTwoFactorChallengeResponse" },
+                  {
+                    type: "object",
+                    properties: {
+                      message: { type: "string", example: "Login successful" },
+                      redirect: {
+                        type: "string",
+                        example: "/customerdashboard",
+                      },
+                    },
+                  },
+                  {
+                    type: "object",
+                    properties: {
+                      requiresTwoFactor: { type: "boolean", example: true },
+                      twoFactorToken: { type: "string" },
+                      email: { type: "string", format: "email" },
+                      message: { type: "string" },
+                    },
+                  },
                 ],
+              },
+            },
+          },
+        },
+        401: { $ref: "#/components/responses/Unauthorized" },
+      },
+    },
+  },
+  "/api/login/google": {
+    post: {
+      tags: ["auth"],
+      summary: "Login or signup using Google identity token",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["credential"],
+              properties: {
+                credential: {
+                  type: "string",
+                  description: "Google ID token received from client",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Google login success",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  message: { type: "string", example: "Login successful" },
+                  redirect: {
+                    type: "string",
+                    example: "/customerdashboard",
+                  },
+                },
               },
             },
           },
@@ -70,7 +146,15 @@ module.exports = {
         required: true,
         content: {
           "application/json": {
-            schema: { $ref: "#/components/schemas/LoginTwoFactorVerifyRequest" },
+            schema: {
+              type: "object",
+              required: ["email", "otp", "twoFactorToken"],
+              properties: {
+                email: { type: "string", format: "email" },
+                otp: { type: "string", minLength: 6, maxLength: 6 },
+                twoFactorToken: { type: "string" },
+              },
+            },
           },
         },
       },
@@ -79,10 +163,44 @@ module.exports = {
           description: "Login successful",
           content: {
             "application/json": {
-              schema: { $ref: "#/components/schemas/LoginSuccessResponse" },
+              schema: {
+                type: "object",
+                properties: {
+                  message: { type: "string", example: "Login successful" },
+                  redirect: {
+                    type: "string",
+                    example: "/customerdashboard",
+                  },
+                },
+              },
             },
           },
         },
+      },
+    },
+  },
+  "/api/login/2fa/resend": {
+    post: {
+      tags: ["auth"],
+      summary: "Resend login 2FA OTP",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["twoFactorToken"],
+              properties: {
+                twoFactorToken: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "2FA OTP resent" },
+        400: { $ref: "#/components/responses/BadRequest" },
+        429: { description: "Rate limited" },
       },
     },
   },
@@ -94,7 +212,17 @@ module.exports = {
         required: true,
         content: {
           "application/json": {
-            schema: { $ref: "#/components/schemas/EmailOtpSendRequest" },
+            schema: {
+              type: "object",
+              required: ["email", "purpose"],
+              properties: {
+                email: { type: "string", format: "email" },
+                purpose: {
+                  type: "string",
+                  enum: ["signup", "forgot-password"],
+                },
+              },
+            },
           },
         },
       },
@@ -112,7 +240,18 @@ module.exports = {
         required: true,
         content: {
           "application/json": {
-            schema: { $ref: "#/components/schemas/EmailOtpVerifyRequest" },
+            schema: {
+              type: "object",
+              required: ["email", "otp", "purpose"],
+              properties: {
+                email: { type: "string", format: "email" },
+                otp: { type: "string", minLength: 6, maxLength: 6 },
+                purpose: {
+                  type: "string",
+                  enum: ["signup", "forgot-password"],
+                },
+              },
+            },
           },
         },
       },
@@ -121,7 +260,13 @@ module.exports = {
           description: "OTP verified",
           content: {
             "application/json": {
-              schema: { $ref: "#/components/schemas/VerificationTokenResponse" },
+              schema: {
+                type: "object",
+                properties: {
+                  message: { type: "string", example: "OTP verified" },
+                  verificationToken: { type: "string" },
+                },
+              },
             },
           },
         },
@@ -136,7 +281,15 @@ module.exports = {
         required: true,
         content: {
           "application/json": {
-            schema: { $ref: "#/components/schemas/ResetPasswordRequest" },
+            schema: {
+              type: "object",
+              required: ["email", "newPassword", "verificationToken"],
+              properties: {
+                email: { type: "string", format: "email" },
+                newPassword: { type: "string", minLength: 8 },
+                verificationToken: { type: "string" },
+              },
+            },
           },
         },
       },
@@ -157,7 +310,12 @@ module.exports = {
           description: "2FA status",
           content: {
             "application/json": {
-              schema: { $ref: "#/components/schemas/TwoFactorStatusResponse" },
+              schema: {
+                type: "object",
+                properties: {
+                  twoFactorEnabled: { type: "boolean" },
+                },
+              },
             },
           },
         },
@@ -171,12 +329,36 @@ module.exports = {
         required: true,
         content: {
           "application/json": {
-            schema: { $ref: "#/components/schemas/TwoFactorStatusUpdateRequest" },
+            schema: {
+              type: "object",
+              required: ["enabled"],
+              properties: {
+                enabled: { type: "boolean" },
+              },
+            },
           },
         },
       },
       responses: {
         200: { description: "2FA setting updated" },
+      },
+    },
+  },
+  "/api/logout": {
+    get: {
+      tags: ["auth"],
+      summary: "Logout current user and clear auth cookie",
+      responses: {
+        200: { description: "Logged out successfully" },
+      },
+    },
+  },
+  "/api/session": {
+    get: {
+      tags: ["auth"],
+      summary: "Get current session state and user role",
+      responses: {
+        200: { description: "Session state retrieved" },
       },
     },
   },

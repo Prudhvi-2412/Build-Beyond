@@ -16,14 +16,13 @@ const {
   getBidForm,
   getSettings,
   getBidSpace,
-  getFavorites,
-  saveFavoriteDesign,
-  removeFavoriteDesign,
   acceptProposal,
   acceptCompanyBid,
   acceptCompanyProposal,
   acceptConstructionProposal,
   rejectCompanyProposal,
+  rejectProposal,
+  updateCustomerSettings,
   updatePassword,
   approveMilestone,
   rejectMilestone,
@@ -74,19 +73,14 @@ router.post(
 router.get("/bidform", getBidForm);
 
 // Protected routes (require authentication)
-router.post("/constructionform", auth, postConstructionForm);
 router.get("/job_status", auth, getJobRequestStatus);
 router.get("/construction_companies_list", auth, getConstructionCompaniesList);
 router.get("/ongoing_projects", auth, getOngoingProjects);
 router.get("/interiordesign_form", auth, getInteriorDesignForm);
 router.get("/interior_designer", auth, getInteriorDesigners);
 router.get("/customersettings", auth, getSettings);
+router.post("/customersettings/update", auth, updateCustomerSettings);
 router.get("/bidspace", auth, getBidSpace);
-
-// FAVORITES API ROUTES (Same paths, but linked to new array logic)
-router.get("/api/customer/favorites", auth, getFavorites);
-router.post("/api/customer/favorites", auth, saveFavoriteDesign);
-router.delete("/api/customer/favorites/:id", auth, removeFavoriteDesign);
 router.get("/customer/accept-proposal/:type/:id", auth, acceptProposal);
 router.get("/customer/accept-bid/:bidId/:companyBidId", auth, acceptCompanyBid);
 router.get(
@@ -100,6 +94,7 @@ router.post(
   auth,
   rejectCompanyProposal,
 );
+router.post("/customer/reject-proposal/:type/:projectId", auth, rejectProposal);
 router.post("/customer/password/update", auth, updatePassword);
 router.post(
   "/customer/milestone/approve/:projectId/:milestoneId",

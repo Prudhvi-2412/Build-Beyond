@@ -10,12 +10,11 @@ module.exports = {
           "application/json": {
             schema: {
               type: "object",
-              required: ["projectId", "subject", "description"],
+              required: ["projectId", "milestone", "message"],
               properties: {
                 projectId: { type: "string" },
-                subject: { type: "string" },
-                description: { type: "string" },
-                category: { type: "string", enum: ["quality", "payment", "timeline", "communication", "other"] },
+                milestone: { type: "number", enum: [0, 25, 50, 75, 100] },
+                message: { type: "string" },
               },
             },
           },
@@ -52,7 +51,12 @@ module.exports = {
       summary: "Get all complaints for a project",
       security: [{ cookieAuth: [] }],
       parameters: [
-        { name: "projectId", in: "path", required: true, schema: { type: "string" } },
+        {
+          name: "projectId",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
       ],
       responses: {
         200: { description: "Project complaints retrieved" },
@@ -65,9 +69,13 @@ module.exports = {
     post: {
       tags: ["complaint"],
       summary: "Reply to a complaint (admin/platformManager)",
-      security: [{ cookieAuth: [] }],
       parameters: [
-        { name: "complaintId", in: "path", required: true, schema: { type: "string" } },
+        {
+          name: "complaintId",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
       ],
       requestBody: {
         required: true,
@@ -75,9 +83,10 @@ module.exports = {
           "application/json": {
             schema: {
               type: "object",
-              required: ["reply"],
+              required: ["message"],
               properties: {
-                reply: { type: "string" },
+                message: { type: "string" },
+                adminId: { type: "string" },
               },
             },
           },

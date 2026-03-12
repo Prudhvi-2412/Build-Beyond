@@ -6,7 +6,6 @@ const {
   ConstructionProjectSchema,
   Bid,
   Company,
-  FavoriteDesign,
 } = require("../models/index");
 const { getTargetDate } = require("../utils/helpers");
 const bcrypt = require("bcrypt");
@@ -407,93 +406,6 @@ const postConstructionForm = async (req, res) => {
   }
 };
 
-const getFavorites = async (req, res) => {
-  try {
-    if (!req.user || !req.user.user_id) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    const customerId = req.user.user_id;
-    const favoritesDoc = await FavoriteDesign.findOne({ customerId }).lean();
-    const favorites = favoritesDoc ? favoritesDoc.designs : [];
-    res.status(200).json({ favorites });
-  } catch (error) {
-    console.error("Error fetching favorites:", error);
-    res.status(500).json({ message: "Failed to retrieve favorites." });
-  }
-};
-
-const saveFavoriteDesign = async (req, res) => {
-  try {
-    if (!req.user || !req.user.user_id) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    const customerId = req.user.user_id;
-    const { designId, category, title, imageUrl } = req.body;
-
-    if (!designId || !category || !title || !imageUrl) {
-      return res
-        .status(400)
-        .json({ message: "Missing required design fields." });
-    }
-
-    const newDesign = { designId, category, title, imageUrl };
-    const updatedDoc = await FavoriteDesign.findOneAndUpdate(
-      { customerId },
-      { $addToSet: { designs: newDesign } },
-      { new: true, upsert: true },
-    );
-
-    if (!updatedDoc) {
-      return res
-        .status(500)
-        .json({ message: "Failed to create or update favorites document." });
-    }
-
-    const addedDesign = updatedDoc.designs.find((d) => d.designId === designId);
-    res.status(201).json({
-      message: "Design added to favorites!",
-      favorite: { ...addedDesign.toObject(), _id: addedDesign.designId },
-    });
-  } catch (error) {
-    console.error("Error saving favorite design:", error);
-    res
-      .status(500)
-      .json({ message: "Failed to save favorite due to a server error." });
-  }
-};
-
-const removeFavoriteDesign = async (req, res) => {
-  try {
-    if (!req.user || !req.user.user_id) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    const customerId = req.user.user_id;
-    const designIdToRemove = req.params.id;
-
-    const result = await FavoriteDesign.updateOne(
-      { customerId },
-      { $pull: { designs: { designId: designIdToRemove } } },
-    );
-
-    if (result.modifiedCount === 0 && result.matchedCount === 0) {
-      return res.status(404).json({
-        message: "Favorite list not found or design not in favorites.",
-      });
-    }
-
-    if (result.modifiedCount === 0 && result.matchedCount === 1) {
-      return res
-        .status(404)
-        .json({ message: "Design not found in favorites array." });
-    }
-
-    res.status(200).json({ message: "Favorite design removed successfully." });
-  } catch (error) {
-    console.error("Error removing favorite design:", error);
-    res.status(500).json({ message: "Failed to remove favorite." });
-  }
-};
-
 const acceptProposal = async (req, res, next) => {
   try {
     const { type, id } = req.params;
@@ -699,6 +611,94 @@ const rejectCompanyProposal = async (req, res) => {
   }
 };
 
+const rejectProposal = async (req, res, next) => {
+  try {
+    const { type, projectId } = req.params;
+    const { reason } = req.body;
+    const customerId = req.user.user_id;
+
+    if (type === "company") {
+      req.params.projectId = projectId;
+      return rejectCompanyProposal(req, res, next);
+    }
+
+    let project;
+
+    if (type === "architect") {
+      project = await ArchitectHiring.findOne({
+        _id: projectId,
+        customer: customerId,
+      });
+
+      if (!project) {
+        return res
+          .status(404)
+          .json({ error: "Project not found or you are not authorized." });
+      }
+
+      project.status = "Rejected";
+    } else if (type === "interior") {
+      project = await DesignRequest.findOne({
+        _id: projectId,
+        customerId,
+      });
+
+      if (!project) {
+        return res
+          .status(404)
+          .json({ error: "Project not found or you are not authorized." });
+      }
+
+      project.status = "rejected";
+    } else {
+      return res.status(400).json({ error: "Invalid project type." });
+    }
+
+    if (reason) {
+      project.rejectionReason = reason;
+    }
+
+    await project.save();
+    return res
+      .status(200)
+      .json({ success: true, message: "Proposal rejected successfully" });
+  } catch (error) {
+    console.error("Error rejecting proposal:", error);
+    return next(error);
+  }
+};
+
+const updateCustomerSettings = async (req, res) => {
+  try {
+    const customerId = req.user.user_id;
+    const { name, email, phone } = req.body;
+
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+
+    if (typeof name === "string") customer.name = name.trim();
+    if (typeof email === "string") customer.email = email.trim().toLowerCase();
+    if (typeof phone === "string") customer.phone = phone.trim();
+
+    await customer.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user: {
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating customer settings:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 const acceptConstructionProposal = async (req, res) => {
   try {
     const { projectId } = req.body;
@@ -752,7 +752,9 @@ const updatePassword = async (req, res) => {
 
     const isSameAsOld = await bcrypt.compare(newPassword, customer.password);
     if (isSameAsOld) {
-      return res.status(400).json({ message: "New password cannot be same as current password." });
+      return res
+        .status(400)
+        .json({ message: "New password cannot be same as current password." });
     }
 
     customer.password = newPassword;
@@ -968,12 +970,10 @@ const reportMilestoneToAdmin = async (req, res) => {
     await project.save();
 
     // TODO: Send notification to admin
-    res
-      .status(200)
-      .json({
-        success: true,
-        message: "Milestone reported to admin for review",
-      });
+    res.status(200).json({
+      success: true,
+      message: "Milestone reported to admin for review",
+    });
   } catch (error) {
     console.error("Error reporting milestone to admin:", error);
     res.status(500).json({ error: "Server error" });
@@ -1129,14 +1129,13 @@ module.exports = {
   getSettings,
   getBidSpace,
   postConstructionForm,
-  getFavorites,
-  saveFavoriteDesign,
-  removeFavoriteDesign,
   acceptProposal,
   acceptCompanyBid,
   acceptCompanyProposal,
   acceptConstructionProposal,
   rejectCompanyProposal,
+  rejectProposal,
+  updateCustomerSettings,
   updatePassword,
   approveMilestone,
   rejectMilestone,

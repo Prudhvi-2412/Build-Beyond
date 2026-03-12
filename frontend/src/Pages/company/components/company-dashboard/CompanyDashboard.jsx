@@ -81,7 +81,6 @@ const CompanyDashboard = () => {
     fetchData();
   }, []);
 
-
   const closeModal = () => {
     setShowModal(false);
     setSelectedBid(null);
@@ -99,7 +98,7 @@ const CompanyDashboard = () => {
       `Enter your proposed price (must be ≤ ₹${
         selectedBid.estimatedBudget?.toLocaleString("en-IN") || "N/A"
       }):`,
-      ""
+      "",
     );
 
     if (!proposedPrice) return; // User cancelled
@@ -115,16 +114,16 @@ const CompanyDashboard = () => {
     if (selectedBid.estimatedBudget && price > selectedBid.estimatedBudget) {
       alert(
         `Price (₹${price.toLocaleString(
-          "en-IN"
+          "en-IN",
         )}) exceeds the budget (₹${selectedBid.estimatedBudget.toLocaleString(
-          "en-IN"
-        )}). Please enter a lower price.`
+          "en-IN",
+        )}). Please enter a lower price.`,
       );
       return;
     }
 
     try {
-      const res = await fetch("http://localhost:5000/api/company/submit-bid", {
+      const res = await fetch("/api/submit-bid", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -149,7 +148,7 @@ const CompanyDashboard = () => {
   };
 
   const updateProjectStatus = async (bidId, status) => {
-    const apiRoute = `/api/company/projects/${bidId}/${status}`;
+    const apiRoute = `/api/projects/${bidId}/${status}`;
     try {
       const res = await fetch(apiRoute, {
         method: "PATCH",
