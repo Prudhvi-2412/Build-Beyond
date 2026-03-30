@@ -7,6 +7,7 @@ const customerPathOverrides = require("./customer");
 const paymentPathOverrides = require("./payment");
 const platformManagerPathOverrides = require("./platformManager");
 const projectPathOverrides = require("./project");
+const reviewPathOverrides = require("./review");
 const workerPathOverrides = require("./worker");
 
 const orderedPathGroups = [
@@ -19,6 +20,7 @@ const orderedPathGroups = [
   { file: "payment", paths: paymentPathOverrides },
   { file: "platformManager", paths: platformManagerPathOverrides },
   { file: "project", paths: projectPathOverrides },
+  { file: "review", paths: reviewPathOverrides },
   { file: "worker", paths: workerPathOverrides },
 ];
 

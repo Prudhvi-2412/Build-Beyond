@@ -18,6 +18,7 @@ const chatRoutes = require("./routes/chatRoutes");
 const complaintRoutes = require("./routes/complaintRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const platformManagerRoutes = require("./routes/platformManagerRoutes");
+const reviewRoutes = require("./routes/reviewRoutes");
 const { setupSwagger } = require("./config/swagger");
 const { initRedis } = require("./utils/redisClient");
 
@@ -103,6 +104,7 @@ const routeMounts = [
   { basePath: "/api", router: adminRoutes },
   { basePath: "/api", router: platformManagerRoutes },
   { basePath: "/api", router: chatRoutes },
+  { basePath: "/api", router: reviewRoutes },
   { basePath: "/api/complaints", router: complaintRoutes },
   { basePath: "/api/payment", router: paymentRoutes },
 ];
