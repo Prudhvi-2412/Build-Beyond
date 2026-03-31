@@ -646,4 +646,102 @@ module.exports = {
       },
     },
   },
+  "/api/admin/platform-managers": {
+    post: {
+      tags: ["admin"],
+      summary: "Create a new platform manager (superadmin only)",
+      security: [{ cookieAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["name", "email", "username", "password"],
+              properties: {
+                name: { type: "string" },
+                email: { type: "string", format: "email" },
+                username: { type: "string" },
+                password: { type: "string", minLength: 8 },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: { description: "Platform manager created" },
+        400: { $ref: "#/components/responses/BadRequest" },
+        401: { $ref: "#/components/responses/Unauthorized" },
+      },
+    },
+    get: {
+      tags: ["admin"],
+      summary: "Get all platform managers (superadmin only)",
+      security: [{ cookieAuth: [] }],
+      responses: {
+        200: { description: "Platform managers retrieved" },
+        401: { $ref: "#/components/responses/Unauthorized" },
+      },
+    },
+  },
+  "/api/admin/platform-managers/{id}/performance": {
+    get: {
+      tags: ["admin"],
+      summary: "Get platform manager performance metrics",
+      security: [{ cookieAuth: [] }],
+      parameters: [
+        {
+          name: "id",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        200: { description: "Performance metrics retrieved" },
+        401: { $ref: "#/components/responses/Unauthorized" },
+        404: { description: "Platform manager not found" },
+      },
+    },
+  },
+  "/api/admin/platform-managers/{id}": {
+    delete: {
+      tags: ["admin"],
+      summary: "Delete platform manager (superadmin only)",
+      security: [{ cookieAuth: [] }],
+      parameters: [
+        {
+          name: "id",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        200: { description: "Platform manager deleted" },
+        401: { $ref: "#/components/responses/Unauthorized" },
+        404: { description: "Platform manager not found" },
+      },
+    },
+  },
+  "/api/admin/platform-managers/{id}/toggle-status": {
+    patch: {
+      tags: ["admin"],
+      summary: "Toggle platform manager active status",
+      security: [{ cookieAuth: [] }],
+      parameters: [
+        {
+          name: "id",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        200: { description: "Status updated" },
+        401: { $ref: "#/components/responses/Unauthorized" },
+        404: { description: "Platform manager not found" },
+      },
+    },
+  },
 };
