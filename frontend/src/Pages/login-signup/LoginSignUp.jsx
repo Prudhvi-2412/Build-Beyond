@@ -51,6 +51,8 @@ const LoginSignUp = () => {
   const [signupVerificationToken, setSignupVerificationToken] = useState("");
   const [signupOtpError, setSignupOtpError] = useState("");
   const [signupResendSeconds, setSignupResendSeconds] = useState(0);
+  const [signupOtpLoading, setSignupOtpLoading] = useState(false);
+  const [signupVerifyLoading, setSignupVerifyLoading] = useState(false);
   const otpRefs = useRef([]);
   const signupOtpRefs = useRef([]);
   const signinOtpRefs = useRef([]);
@@ -163,6 +165,10 @@ const LoginSignUp = () => {
       setSigninOtp(Array(OTP_LENGTH).fill(""));
       setSigninOtpError("");
       setSigninResendSeconds(0);
+    }
+    if (tab !== "signup") {
+      setSignupOtpLoading(false);
+      setSignupVerifyLoading(false);
     }
   };
 
@@ -590,18 +596,24 @@ const LoginSignUp = () => {
       return;
     }
     try {
+      setSignupOtpLoading(true);
+      setSignupOtpError("");
       await sendOtpRequest({ email, purpose: "signup" });
       setSignupOtpSent(true);
       setSignupOtp(Array(OTP_LENGTH).fill(""));
-      setSignupOtpError("");
       startSignupCooldown();
     } catch (error) {
       setSignupOtpError(error.message);
+      setSignupOtpSent(false);
+    } finally {
+      setSignupOtpLoading(false);
     }
   };
 
   const handleVerifySignupOTP = async () => {
     try {
+      setSignupVerifyLoading(true);
+      setSignupOtpError("");
       const data = await verifyOtpRequest({
         email: signupData.email,
         otpCode: signupOtp.join(""),
@@ -610,11 +622,12 @@ const LoginSignUp = () => {
 
       setSignupVerificationToken(data.verificationToken);
       setSignupEmailVerified(true);
-      setSignupOtpError("");
       setErrors((prev) => ({ ...prev, emailVerification: undefined }));
     } catch (error) {
       setSignupOtpError(error.message);
       setSignupOtp(Array(OTP_LENGTH).fill(""));
+    } finally {
+      setSignupVerifyLoading(false);
     }
   };
 
@@ -990,26 +1003,30 @@ const LoginSignUp = () => {
                             }`}
                           value={signupData.email}
                           onChange={(e) => handleInputChange(e, "signup")}
+                          disabled={signupOtpSent && !signupEmailVerified}
                           required
                         />
                         <div className="ls-error-message">{errors.email}</div>
+                        {signupOtpError && <div className="ls-validation-error" style={{ marginTop: "8px", marginBottom: "8px" }}>{signupOtpError}</div>}
                         {!signupEmailVerified && (
                           <button
                             type="button"
                             className="ls-btn ls-otp-action-btn"
                             onClick={handleSendSignupOTP}
+                            disabled={signupOtpLoading || signupOtpSent}
                             style={{ marginTop: "8px" }}
                           >
-                            {signupOtpSent ? "Send OTP Again" : "Send OTP"}
+                            {signupOtpLoading ? "Sending..." : signupOtpSent ? "OTP Sent - Enter code" : "Send OTP"}
                           </button>
                         )}
                         {signupEmailVerified && (
                           <div className="ls-success-text" style={{ marginTop: "8px" }}>
-                            Email verified successfully
+                            ✓ Email verified successfully
                           </div>
                         )}
                         {signupOtpSent && !signupEmailVerified && (
                           <div className="ls-signup-otp-box" style={{ marginTop: "10px" }}>
+                            <label style={{ display: "block", marginBottom: "8px", fontWeight: "600" }}>{`Enter 6-digit OTP sent to ${signupData.email}`}</label>
                             <div className="ls-otp-container" style={{ marginBottom: "8px" }}>
                               {signupOtp.map((digit, i) => (
                                 <input
@@ -1021,11 +1038,12 @@ const LoginSignUp = () => {
                                   onChange={(e) => handleSignupOtpChange(i, e.target.value)}
                                   onKeyDown={(e) => handleSignupOtpKeyDown(i, e)}
                                   ref={(el) => (signupOtpRefs.current[i] = el)}
+                                  disabled={signupVerifyLoading}
                                 />
                               ))}
                             </div>
-                            <button type="button" className="ls-btn ls-otp-action-btn" onClick={handleVerifySignupOTP}>
-                              Verify Email OTP
+                            <button type="button" className="ls-btn ls-otp-action-btn" onClick={handleVerifySignupOTP} disabled={signupVerifyLoading || signupOtp.join("").length !== OTP_LENGTH}>
+                              {signupVerifyLoading ? "Verifying..." : "Verify Email OTP"}
                             </button>
                             <div style={{ marginTop: "6px" }}>
                               <a
@@ -1038,7 +1056,6 @@ const LoginSignUp = () => {
                             </div>
                           </div>
                         )}
-                        {signupOtpError && <div className="ls-validation-error">{signupOtpError}</div>}
                         {errors.emailVerification && (
                           <div className="ls-validation-error">{errors.emailVerification}</div>
                         )}

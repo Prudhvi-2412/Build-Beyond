@@ -357,57 +357,57 @@
 > **Tag**: `project-customer-accessed`  
 > **Count**: 20 endpoints
 
-### Create Project
+### Customer - Create Projects
 | # | Method | Endpoint | Summary |
 |---|--------|----------|---------|
 | 1 | POST | `/api/architect_submit` | Submit architect hiring request |
 | 2 | POST | `/api/design_request` | Submit design request |
 | 3 | POST | `/api/construction_form` | Submit construction project form |
 
-### View Projects
+### Customer - View & Manage Projects
 | # | Method | Endpoint | Summary |
 |---|--------|----------|---------|
 | 4 | GET | `/api/projects` | Get all projects |
 | 5 | GET | `/api/projects/{id}` | Get project by id |
-
-### Manage Projects
-| # | Method | Endpoint | Summary |
-|---|--------|----------|---------|
 | 6 | GET | `/api/edit-project/{id}` | Get editable project data |
 | 7 | PATCH | `/api/projects/update` | Update project details |
 
-### Bidding
+### Customer - Bidding
 | # | Method | Endpoint | Summary |
 |---|--------|----------|---------|
 | 8 | POST | `/api/customer/submit-bid` | Submit bid on project |
 | 9 | POST | `/api/customer/accept-bid` | Accept bid |
 | 10 | POST | `/api/customer/decline-bid` | Decline bid |
 
-### Milestones
+### Customer - Milestone Management
 | # | Method | Endpoint | Summary |
 |---|--------|----------|---------|
 | 11 | POST | `/api/customer/approve-milestone` | Approve milestone |
 | 12 | POST | `/api/customer/request-milestone-revision` | Request milestone revision |
 | 13 | POST | `/api/customer/pay-milestone` | Pay milestone |
 
-### Messaging
+### Customer - Messaging
 | # | Method | Endpoint | Summary |
 |---|--------|----------|---------|
-| 14 | GET | `/api/company/unviewed-customer-messages` | Get unviewed messages from customer |
-| 15 | POST | `/api/company/mark-messages-viewed/{projectId}` | Mark company messages as viewed |
-| 16 | GET | `/api/customer/unviewed-company-messages` | Get unviewed messages from company |
-| 17 | POST | `/api/customer/mark-messages-viewed/{projectId}` | Mark customer messages as viewed |
+| 14 | GET | `/api/customer/unviewed-company-messages` | Get unviewed messages from company |
+| 15 | POST | `/api/customer/mark-messages-viewed/{projectId}` | Mark customer messages as viewed |
 
-### Reviews
+### Customer - Reviews
 | # | Method | Endpoint | Summary |
 |---|--------|----------|---------|
-| 18 | POST | `/api/customer/submit-project-review` | Submit project review |
+| 16 | POST | `/api/customer/submit-project-review` | Submit project review |
 
-### Worker Requests
+### Company - Messaging
 | # | Method | Endpoint | Summary |
 |---|--------|----------|---------|
-| 19 | POST | `/api/company/worker-request/accept` | Company accept worker request |
-| 20 | POST | `/api/company/worker-request/reject` | Company reject worker request |
+| 17 | GET | `/api/company/unviewed-customer-messages` | Get unviewed messages from customer |
+| 18 | POST | `/api/company/mark-messages-viewed/{projectId}` | Mark company messages as viewed |
+
+### Company - Worker Management
+| # | Method | Endpoint | Summary |
+|---|--------|----------|---------|
+| 19 | POST | `/api/company/worker-request/accept` | Accept worker request |
+| 20 | POST | `/api/company/worker-request/reject` | Reject worker request |
 
 ---
 
