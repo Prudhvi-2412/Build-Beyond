@@ -1,6 +1,6 @@
 /* ---------- Container ---------- */
 .architect-form-container {
-  max-width: 900px;
+  max-width: 1240px;
   margin: 0 auto;
   background: white;
   padding: 40px;
@@ -24,6 +24,40 @@
   height: 4px;
   background: linear-gradient(to right, #facc15, #1e293b);
   margin: 0 auto;
+}
+
+.architect-form-content-layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.architect-form-verification-panel {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px;
+  position: sticky;
+  top: 16px;
+}
+
+.architect-form-verification-panel h3 {
+  margin: 0 0 10px 0;
+  color: #1e293b;
+  font-size: 1.1rem;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.architect-form-verification-list p {
+  margin: 8px 0;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.architect-form-main-content {
+  min-width: 0;
 }
 
 /* ---------- Section ---------- */
@@ -207,6 +241,27 @@
   background-color: #eab308;
   transform: translateY(-3px);
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+.architect-form-btn-submit:disabled {
+  cursor: wait;
+  opacity: 0.75;
+  transform: none;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.architect-form-btn-submit:disabled:hover {
+  background-color: #facc15;
+}
+
+@media (max-width: 960px) {
+  .architect-form-verification-panel {
+    position: static;
+    margin-bottom: 20px;
+  }
+
+  .architect-form-content-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ---------- Responsive ---------- */

@@ -56,7 +56,7 @@ module.exports = {
       },
     },
   },
-  "/api/customer/bidForm_Submit": {
+  "/api/bidForm_Submit": {
     post: {
       tags: ["customer"],
       summary: "Submit construction bid form with site and floor images",

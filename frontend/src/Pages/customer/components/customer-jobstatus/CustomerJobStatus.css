@@ -1,12 +1,36 @@
 /* src/Pages/customer/CustomerJobStatus.css */
 /* All class names prefixed with 'cjs-' to prevent global CSS conflicts */
-/* Theme: light orange. Hover animations/transitions removed. */
+/* Theme: professional cool palette. Hover animations/transitions removed. */
+
+:root {
+  --cjs-bg: #f3f6fb;
+  --cjs-surface: #ffffff;
+  --cjs-surface-soft: #f7fafd;
+  --cjs-text: #0f172a;
+  --cjs-muted: #526072;
+  --cjs-border: #d7e0ea;
+  --cjs-primary: #2563eb;
+  --cjs-primary-soft: #e8f0ff;
+  --cjs-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
 
 .cjs-container {
-  max-width: 1400px;
+  max-width: 1480px;
   margin: 0 auto;
-  padding: 40px;
+  padding: clamp(20px, 2.8vw, 42px);
   min-height: 100vh;
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(29, 78, 216, 0.06),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at bottom left,
+      rgba(14, 116, 144, 0.07),
+      transparent 34%
+    ),
+    var(--cjs-bg);
 }
 
 .cjs-header {
@@ -27,76 +51,76 @@
 
 .cjs-tab-container {
   display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
-  border-bottom: 2px solid #e2e8f0;
-  background: white;
-  border-radius: 12px 12px 0 0;
-  padding: 0 8px;
+  gap: 10px;
+  margin-bottom: 26px;
+  border: 1px solid var(--cjs-border);
+  background: var(--cjs-surface);
+  border-radius: 14px;
+  padding: 8px;
+  box-shadow: var(--cjs-shadow);
 }
 
 .cjs-tab {
-  padding: 16px 32px;
+  padding: 13px 22px;
   cursor: pointer;
-  border-bottom: 3px solid transparent;
-  font-weight: 500;
-  color: #64748b;
-  font-size: 1rem;
+  border: 1px solid transparent;
+  font-weight: 600;
+  color: #5b6b80;
+  font-size: 0.96rem;
   background: transparent;
-  border-radius: 8px 8px 0 0;
-  /* transitions removed */
+  border-radius: 10px;
 }
 
 .cjs-tab:hover {
-  color: #1e293b;
-  background: #f8fafc;
+  color: var(--cjs-text);
+  background: var(--cjs-surface-soft);
 }
 
 .cjs-tab.cjs-active {
-  border-bottom: 3px solid #3b82f6;
+  border-color: rgba(29, 78, 216, 0.24);
   font-weight: 600;
-  color: #1e293b;
-  background: white;
+  color: var(--cjs-primary);
+  background: var(--cjs-primary-soft);
 }
 
 /* Status Filter Tabs */
 .cjs-status-filter-tabs {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 24px;
-  padding: 16px;
-  background: white;
+  padding: 14px;
+  background: var(--cjs-surface);
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--cjs-border);
+  box-shadow: var(--cjs-shadow);
   flex-wrap: wrap;
 }
 
 .cjs-status-filter-btn {
-  padding: 10px 20px;
-  border: 2px solid #e2e8f0;
-  background: white;
+  padding: 9px 16px;
+  border: 1px solid var(--cjs-border);
+  background: var(--cjs-surface);
   border-radius: 8px;
   font-weight: 600;
-  font-size: 0.9rem;
-  color: #64748b;
+  font-size: 0.88rem;
+  color: #516277;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  /* transitions removed */
 }
 
 .cjs-status-filter-btn:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #475569;
+  background: var(--cjs-surface-soft);
+  border-color: #c2d1e0;
+  color: #334155;
 }
 
 .cjs-status-filter-btn.active {
-  background: #3b82f6;
+  background: var(--cjs-primary);
   color: white;
-  border-color: #3b82f6;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.12);
+  border-color: var(--cjs-primary);
+  box-shadow: 0 8px 20px rgba(29, 78, 216, 0.22);
 }
 
 .cjs-status-filter-btn.active:hover {
@@ -125,54 +149,48 @@
 }
 
 .cjs-architect-heading {
-  color: #1e293b;
-  padding-left: 16px;
+  color: var(--cjs-text);
   margin-bottom: 16px;
   font-weight: 700;
-  font-size: 1.75rem;
-  box-shadow:
-    0 4px 8px rgba(59, 130, 246, 0.1),
-    inset 0 0 0 1px #3b82f6;
+  font-size: 1.55rem;
+  box-shadow: var(--cjs-shadow);
   padding: 12px 16px;
-  border-radius: 8px;
-  background: #eff6ff;
+  border-radius: 12px;
+  border: 1px solid #bed4ff;
+  background: linear-gradient(95deg, #eef4ff 0%, #f7faff 100%);
 }
 
 .cjs-interior-heading {
-  color: #1e293b;
-  padding-left: 16px;
+  color: var(--cjs-text);
   margin-bottom: 16px;
   font-weight: 700;
-  font-size: 1.75rem;
-  box-shadow:
-    0 4px 8px rgba(139, 92, 246, 0.1),
-    inset 0 0 0 1px #8b5cf6;
+  font-size: 1.55rem;
+  box-shadow: var(--cjs-shadow);
   padding: 12px 16px;
-  border-radius: 8px;
-  background: #f3e8ff;
+  border-radius: 12px;
+  border: 1px solid #d7caf9;
+  background: linear-gradient(95deg, #f5f0ff 0%, #faf8ff 100%);
 }
 
 .cjs-company-heading {
-  color: #1e293b;
-  padding-left: 16px;
+  color: var(--cjs-text);
   margin-bottom: 16px;
   font-weight: 700;
-  font-size: 1.75rem;
-  box-shadow:
-    0 4px 8px rgba(6, 182, 212, 0.1),
-    inset 0 0 0 1px #06b6d4;
+  font-size: 1.55rem;
+  box-shadow: var(--cjs-shadow);
   padding: 12px 16px;
-  border-radius: 8px;
-  background: #ecfeff;
+  border-radius: 12px;
+  border: 1px solid #bfdde9;
+  background: linear-gradient(95deg, #eaf8ff 0%, #f5fbff 100%);
 }
 
 .cjs-application {
-  background: #ffffff;
+  background: var(--cjs-surface);
   border-radius: 16px;
   padding: 32px;
   margin-bottom: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  border: 1px solid #e2e8f0;
+  box-shadow: var(--cjs-shadow);
+  border: 1px solid var(--cjs-border);
   position: relative;
   overflow: hidden;
   display: flex;
@@ -192,13 +210,13 @@
 }
 
 .cjs-architect-app::before {
-  background: #ffd8b5;
+  background: linear-gradient(to bottom, #3b82f6, #1d4ed8);
 }
 .cjs-interior-app::before {
-  background: #ffb07a;
+  background: linear-gradient(to bottom, #8b5cf6, #6d28d9);
 }
 .cjs-company-app::before {
-  background: #f97316;
+  background: linear-gradient(to bottom, #06b6d4, #0e7490);
 }
 
 .cjs-status-container {
@@ -209,30 +227,30 @@
 }
 
 .cjs-status {
-  padding: 8px 16px;
-  border-radius: 24px;
-  font-size: 0.875rem;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
 }
 
 .cjs-architect-status {
-  background-color: #fff7ed;
-  color: #c2410c;
-  border: 1px solid #c2410c;
+  background-color: #eef4ff;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
 }
 
 .cjs-interior-status {
-  background-color: #fff4e6;
-  color: #b45309;
-  border: 1px solid #b45309;
+  background-color: #f2f0ff;
+  color: #5b21b6;
+  border: 1px solid #c4b5fd;
 }
 
 .cjs-company-status {
-  background-color: #fff2e8;
-  color: #92400e;
-  border: 1px solid #92400e;
+  background-color: #ecfeff;
+  color: #155e75;
+  border: 1px solid #67e8f9;
 }
 
 .cjs-chat-button {
@@ -247,27 +265,27 @@
 }
 
 .cjs-architect-chat {
-  background: #ffd8b5;
-  color: #1e1b18;
+  background: #dbeafe;
+  color: #1e3a8a;
 }
 .cjs-architect-chat:hover {
-  background: #ffd8b5; /* no animation */
+  background: #dbeafe; /* no animation */
 }
 
 .cjs-interior-chat {
-  background: #ffb07a;
-  color: #1e1b18;
+  background: #e9ddff;
+  color: #5b21b6;
 }
 .cjs-interior-chat:hover {
-  background: #ffb07a;
+  background: #e9ddff;
 }
 
 .cjs-company-chat {
-  background: #f97316;
+  background: #0e7490;
   color: white;
 }
 .cjs-company-chat:hover {
-  background: #f97316;
+  background: #0e7490;
 }
 
 .cjs-application h3 {
@@ -278,9 +296,26 @@
   line-height: 1.4;
 }
 
+.cjs-project-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.cjs-proposal-corner {
+  margin-top: 0;
+  min-width: 280px;
+  max-width: 420px;
+}
+
+.cjs-proposal-corner p {
+  margin: 0;
+}
+
 .cjs-project-name {
   font-weight: 700;
-  color: #fb923c; /* primary orange for project names */
+  color: var(--cjs-primary);
 }
 
 .cjs-section-title {
@@ -301,7 +336,7 @@
   left: 0;
   width: 60px;
   height: 2px;
-  background: #facc15;
+  background: var(--cjs-primary);
   border-radius: 2px;
 }
 
@@ -361,9 +396,9 @@
   gap: 16px;
   margin: 20px 0;
   padding: 20px;
-  background: #fff7ed;
+  background: #f8fbff;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--cjs-border);
 }
 
 .cjs-company-detail-item {
@@ -392,23 +427,74 @@
   gap: 24px;
   margin-top: 24px;
   padding: 24px;
-  background: #fffaf7;
+  background: #f7fafc;
   border-radius: 12px;
+  border: 1px solid var(--cjs-border);
 }
 
 .cjs-application-data {
-  background-color: #ffffff;
+  background-color: var(--cjs-surface);
   border-radius: 12px;
   padding: 20px;
   min-width: 300px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--cjs-border);
+}
+
+.cjs-worker-details-card {
+  background-color: #f8fbff;
+  border: 1px solid var(--cjs-border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.cjs-worker-details-card .cjs-section-title {
+  margin-bottom: 14px;
+}
+
+.cjs-hire-details-inline {
+  margin: 8px 0 4px;
+}
+
+.cjs-edit-action {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.cjs-btn-edit-request {
+  border: 1px solid #1d4ed8;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 10px;
+  font-weight: 700;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.cjs-btn-edit-request:hover {
+  background: #dbeafe;
+}
+
+.cjs-btn-edit-request:disabled {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.cjs-edit-lock-reason {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.86rem;
 }
 
 .cjs-proposal-container {
-  background-color: white;
-  border: 1px solid #d1b09a;
+  background-color: var(--cjs-surface);
+  border: 1px solid var(--cjs-border);
   border-radius: 10px;
-  padding: 10px;
+  padding: 14px;
   margin-top: 15px;
 }
 
@@ -427,10 +513,11 @@
 }
 
 .cjs-proposal-section {
-  background-color: #fff7f0;
+  background-color: #f4f8ff;
   border-radius: 8px;
-  padding: 12px;
+  padding: 14px;
   margin-top: 10px;
+  border: 1px solid #d7e3f5;
 }
 
 .cjs-proposal-price {
@@ -494,13 +581,14 @@
   flex-wrap: wrap;
   margin: 24px 0;
   padding: 16px;
-  background: #fffaf7;
+  background: #f8fbff;
   border-radius: 12px;
+  border: 1px solid var(--cjs-border);
 }
 
 .cjs-section-btn {
-  background: #ffffff;
-  border: 2px solid #e2e8f0;
+  background: var(--cjs-surface);
+  border: 1px solid var(--cjs-border);
   border-radius: 10px;
   padding: 12px 20px;
   font-size: 0.95rem;
@@ -514,9 +602,8 @@
 }
 
 .cjs-section-btn:hover {
-  background: #fff7ed;
-  border-color: #e9c7ad;
-  /* no transform or animation */
+  background: var(--cjs-surface-soft);
+  border-color: #c2d1e0;
 }
 
 .cjs-milestone-btn {
@@ -568,9 +655,9 @@
 .cjs-milestones-section {
   margin: 24px 0;
   padding: 28px;
-  background: #fffaf7;
+  background: #f8fbff;
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--cjs-border);
 }
 
 .cjs-milestones-section h4 {
@@ -795,10 +882,10 @@
 .cjs-updates-section {
   margin: 24px 0;
   padding: 28px;
-  background: #f8fafc;
+  background: #f8fbff;
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--cjs-border);
+  box-shadow: var(--cjs-shadow);
 }
 
 .cjs-updates-section h4 {
@@ -861,10 +948,10 @@
 .cjs-images-section {
   margin: 24px 0;
   padding: 28px;
-  background: #f8fafc;
+  background: #f8fbff;
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--cjs-border);
+  box-shadow: var(--cjs-shadow);
 }
 
 .cjs-images-section h4 {
@@ -898,7 +985,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(2, 6, 23, 0.88);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -947,6 +1034,16 @@
 }
 
 @media (max-width: 768px) {
+  .cjs-project-header-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .cjs-proposal-corner {
+    min-width: 100%;
+    max-width: 100%;
+  }
+
   .cjs-company-app-container {
     grid-template-columns: 1fr;
   }
@@ -964,6 +1061,9 @@
   }
   .cjs-company-details-grid {
     grid-template-columns: 1fr;
+  }
+  .cjs-worker-details-card {
+    min-width: 100%;
   }
   .cjs-status-filter-tabs {
     gap: 8px;
@@ -1114,7 +1214,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(3px);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1122,12 +1223,19 @@
 }
 
 .cjs-modal-content {
-  background: white;
+  background: var(--cjs-surface);
   border-radius: 16px;
   width: 90%;
   max-width: 550px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 28px 44px rgba(2, 6, 23, 0.24);
   overflow: hidden;
+  border: 1px solid var(--cjs-border);
+}
+
+.cjs-company-details-modal {
+  width: 95%;
+  max-width: 980px;
+  max-height: 88vh;
 }
 
 .cjs-modal-header {
@@ -1444,23 +1552,23 @@
 }
 
 .cjs-btn-view-details {
-  background: #3b82f6;
+  background: var(--cjs-primary);
   color: white;
   padding: 12px 24px;
-  border: none;
+  border: 1px solid var(--cjs-primary);
   border-radius: 8px;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.12);
+  box-shadow: 0 10px 18px rgba(29, 78, 216, 0.22);
 }
 
 .cjs-btn-view-details:hover {
-  background: #2563eb;
+  background: #1d4ed8;
 }
 
 .cjs-btn-view-details:active {
-  background: #1d4ed8;
+  background: #1e40af;
   box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
 }
 

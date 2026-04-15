@@ -47,6 +47,10 @@ const CustomerJobStatus = () => {
     projectType: null,
     proposal: null,
   });
+  const [companyDetailsModal, setCompanyDetailsModal] = useState({
+    isOpen: false,
+    project: null,
+  });
 
   const fetchJobStatus = async () => {
     try {
@@ -571,7 +575,7 @@ const CustomerJobStatus = () => {
           res.data.message || "Proposal accepted! Redirecting to payment...",
         );
         if (type === "company") {
-          navigate("/customerdashboard/ongoing_projects");
+          navigate("/customerdashboard/job_status");
         } else if (res.data.redirect) {
           navigate(res.data.redirect);
         } else {
@@ -681,6 +685,221 @@ const CustomerJobStatus = () => {
     );
   };
 
+  const getEditAvailability = (app, type) => {
+    const status = (app.status || "").toLowerCase();
+
+    if (status !== "pending") {
+      return {
+        canEdit: false,
+        reason: "Editing is available only while the request is pending.",
+      };
+    }
+
+    if (type === "architect" || type === "interior") {
+      if (app.proposal?.price || app.proposal?.description) {
+        return {
+          canEdit: false,
+          reason: "Editing is locked after proposal activity starts.",
+        };
+      }
+      if ((app.milestones || []).length > 0) {
+        return {
+          canEdit: false,
+          reason: "Editing is locked after milestone activity starts.",
+        };
+      }
+      if ((app.projectUpdates || []).length > 0) {
+        return {
+          canEdit: false,
+          reason: "Editing is locked after project updates are posted.",
+        };
+      }
+      return { canEdit: true, reason: "" };
+    }
+
+    if (type === "company") {
+      if (app.proposal?.price || app.proposal?.description) {
+        return {
+          canEdit: false,
+          reason: "Editing is locked after proposal activity starts.",
+        };
+      }
+      if ((app.milestones || []).length > 0) {
+        return {
+          canEdit: false,
+          reason: "Editing is locked after milestone activity starts.",
+        };
+      }
+      if ((app.recentUpdates || []).length > 0) {
+        return {
+          canEdit: false,
+          reason: "Editing is locked after project updates are posted.",
+        };
+      }
+      if ((app.completionPercentage || 0) > 0) {
+        return {
+          canEdit: false,
+          reason: "Editing is locked once progress has started.",
+        };
+      }
+      return { canEdit: true, reason: "" };
+    }
+
+    return { canEdit: false, reason: "Editing is not available." };
+  };
+
+  const handleEditRequest = (app, type) => {
+    const params = new URLSearchParams();
+    params.set("editId", app._id);
+
+    if (type === "architect") {
+      const workerId = app.worker?._id || app.worker;
+      if (workerId) params.set("workerId", workerId);
+    }
+    if (type === "interior") {
+      const workerId = app.workerId?._id || app.workerId;
+      if (workerId) params.set("workerId", workerId);
+    }
+    if (type === "company") {
+      const companyId = app.companyId?._id || app.companyId;
+      if (companyId) params.set("companyId", companyId);
+    }
+
+    const pathMap = {
+      architect: "/customerdashboard/architect_form",
+      interior: "/customerdashboard/interiordesign_form",
+      company: "/customerdashboard/constructionform",
+    };
+
+    navigate(`${pathMap[type]}?${params.toString()}`);
+  };
+
+  const renderEditAction = (app, type) => {
+    const { canEdit, reason } = getEditAvailability(app, type);
+
+    return (
+      <div className="cjs-edit-action">
+        <button
+          type="button"
+          className="cjs-btn-edit-request"
+          onClick={() => handleEditRequest(app, type)}
+          disabled={!canEdit}
+          title={canEdit ? "Edit this request" : reason}
+        >
+          Edit Request
+        </button>
+        {!canEdit && <p className="cjs-edit-lock-reason">{reason}</p>}
+      </div>
+    );
+  };
+
+  const formatLocation = (location) => {
+    if (!location) return "Not available";
+    if (typeof location === "string") return location;
+
+    const locationParts = [
+      location.city,
+      location.state,
+      location.country,
+      location.pincode || location.postalCode,
+    ].filter(Boolean);
+
+    return locationParts.length > 0
+      ? locationParts.join(", ")
+      : "Not available";
+  };
+
+  const isHiredOrAccepted = (status) => {
+    const normalized = (status || "").toLowerCase();
+    return [
+      "accepted",
+      "completed",
+      "pending payment",
+      "pending_payment",
+    ].includes(normalized);
+  };
+
+  const renderHireDetails = (app, type, wrapperClass = "") => {
+    const hiringStatus = isHiredOrAccepted(app.status)
+      ? "Hired"
+      : "Trying to hire";
+
+    const isPopulatedEntity = (entity, kind) => {
+      if (!entity || typeof entity !== "object" || Array.isArray(entity)) {
+        return false;
+      }
+
+      return kind === "company"
+        ? Boolean(entity.companyName || entity.contactPerson || entity.email)
+        : Boolean(entity.name || entity.email || entity.phone);
+    };
+
+    if (type === "company") {
+      const company =
+        app.assignedCompanyDetails ||
+        (isPopulatedEntity(app.companyId, "company") ? app.companyId : null);
+
+      return (
+        <div className={`cjs-worker-details-card ${wrapperClass}`.trim()}>
+          <div className="cjs-section-title">Company Details</div>
+          <p>
+            <strong>Status:</strong> {hiringStatus}
+          </p>
+          <p>
+            <strong>Company Name:</strong>{" "}
+            {company?.companyName || "Not assigned yet"}
+          </p>
+          <p>
+            <strong>Contact Person:</strong>{" "}
+            {company?.contactPerson || "Not available"}
+          </p>
+          <p>
+            <strong>Email:</strong> {company?.email || "Not available"}
+          </p>
+          <p>
+            <strong>Phone:</strong> {company?.phone || "Not available"}
+          </p>
+          <p>
+            <strong>Location:</strong> {formatLocation(company?.location)}
+          </p>
+        </div>
+      );
+    }
+
+    const workerRef = type === "architect" ? app.worker : app.workerId;
+    const worker =
+      app.assignedWorkerDetails ||
+      (isPopulatedEntity(workerRef, "worker") ? workerRef : null);
+
+    return (
+      <div className={`cjs-worker-details-card ${wrapperClass}`.trim()}>
+        <div className="cjs-section-title">Worker Details</div>
+        <p>
+          <strong>Status:</strong> {hiringStatus}
+        </p>
+        <p>
+          <strong>Name:</strong> {worker?.name || "Not assigned yet"}
+        </p>
+        <p>
+          <strong>Email:</strong> {worker?.email || "Not available"}
+        </p>
+        <p>
+          <strong>Phone:</strong> {worker?.phone || "Not available"}
+        </p>
+        <p>
+          <strong>Specialization:</strong>{" "}
+          {worker?.specialization || "Not available"}
+        </p>
+        <p>
+          <strong>Experience:</strong>{" "}
+          {worker?.experience !== undefined && worker?.experience !== null
+            ? `${worker.experience} years`
+            : "Not available"}
+        </p>
+      </div>
+    );
+  };
+
   const renderArchitectApp = (app) => {
     const hasMilestones = app.milestones && app.milestones.length > 0;
     const hasUpdates = app.projectUpdates && app.projectUpdates.length > 0;
@@ -694,13 +913,25 @@ const CustomerJobStatus = () => {
         <div className="cjs-status-container">
           <div className="cjs-status cjs-architect-status">{app.status}</div>
         </div>
-        <h3>
-          <span className="cjs-project-name">{app.projectName}</span>
-          {app.worker?.name && ` with ${app.worker.name}`}
-        </h3>
+
+        <div className="cjs-project-header-row">
+          <h3>
+            <span className="cjs-project-name">{app.projectName}</span>
+            {app.worker?.name && ` with ${app.worker.name}`}
+          </h3>
+
+          <div className="cjs-proposal-container cjs-proposal-corner">
+            {renderProposal(app, "architect")}
+          </div>
+        </div>
+
         <div className="cjs-date-info">
           Submitted: {formatDate(app.createdAt)}
         </div>
+
+        {renderEditAction(app, "architect")}
+
+        {renderHireDetails(app, "architect", "cjs-hire-details-inline")}
 
         {pendingMilestones > 0 && (
           <div className="cjs-pending-notice">
@@ -834,10 +1065,6 @@ const CustomerJobStatus = () => {
                 </div>
               </div>
             )}
-
-            <div className="cjs-application-data cjs-proposal-container">
-              {renderProposal(app, "architect")}
-            </div>
           </div>
         )}
 
@@ -865,10 +1092,22 @@ const CustomerJobStatus = () => {
         <div className="cjs-status-container">
           <div className="cjs-status cjs-interior-status">{app.status}</div>
         </div>
-        <h3 className="cjs-project-name">{app.projectName}</h3>
+
+        <div className="cjs-project-header-row">
+          <h3 className="cjs-project-name">{app.projectName}</h3>
+
+          <div className="cjs-proposal-container cjs-proposal-corner">
+            {renderProposal(app, "interior")}
+          </div>
+        </div>
+
         <p>
           <strong>Email:</strong> {app.email}
         </p>
+
+        {renderEditAction(app, "interior")}
+
+        {renderHireDetails(app, "interior", "cjs-hire-details-inline")}
 
         {pendingMilestones > 0 && (
           <div className="cjs-pending-notice">
@@ -936,10 +1175,6 @@ const CustomerJobStatus = () => {
                 </div>
               </div>
             )}
-
-            <div className="cjs-proposal-container">
-              {renderProposal(app, "interior")}
-            </div>
           </>
         )}
 
@@ -964,11 +1199,15 @@ const CustomerJobStatus = () => {
         Submitted: {formatDate(app.createdAt)}
       </div>
 
+      {renderEditAction(app, "company")}
+
       {/* Project Details Section */}
       <div className="cjs-company-details-grid">
         <div className="cjs-company-detail-item">
           <span className="cjs-detail-label">Project Type:</span>
-          <span className="cjs-detail-value">{app.projectType}</span>
+          <span className="cjs-detail-value">
+            {app.projectType || app.buildingType || "Not specified"}
+          </span>
         </div>
         <div className="cjs-company-detail-item">
           <span className="cjs-detail-label">Budget:</span>
@@ -981,6 +1220,21 @@ const CustomerJobStatus = () => {
           <span className="cjs-detail-value">{app.projectTimeline} months</span>
         </div>
       </div>
+
+      {renderHireDetails(app, "company")}
+
+      <button
+        type="button"
+        className="cjs-btn-view-details"
+        onClick={() =>
+          setCompanyDetailsModal({
+            isOpen: true,
+            project: app,
+          })
+        }
+      >
+        View Details
+      </button>
 
       {/* Proposal Section */}
       {renderProposal(app, "company")}
@@ -1210,6 +1464,181 @@ const CustomerJobStatus = () => {
               ×
             </button>
             <img src={lightboxImage} alt="Full size preview" />
+          </div>
+        </div>
+      )}
+
+      {/* Construction Project Details Modal */}
+      {companyDetailsModal.isOpen && companyDetailsModal.project && (
+        <div
+          className="cjs-modal-overlay"
+          onClick={() =>
+            setCompanyDetailsModal({ isOpen: false, project: null })
+          }
+        >
+          <div
+            className="cjs-modal-content cjs-company-details-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="cjs-modal-header">
+              <h3>Construction Project Details</h3>
+              <button
+                className="cjs-modal-close"
+                onClick={() =>
+                  setCompanyDetailsModal({ isOpen: false, project: null })
+                }
+              >
+                ×
+              </button>
+            </div>
+
+            <div
+              className="cjs-modal-body"
+              style={{ maxHeight: "65vh", overflowY: "auto" }}
+            >
+              <div
+                className="cjs-application-data-section"
+                style={{ marginTop: 0 }}
+              >
+                <div className="cjs-application-data">
+                  <div className="cjs-section-title">Project Basics</div>
+                  <p>
+                    <strong>Project Name:</strong>{" "}
+                    {companyDetailsModal.project.projectName || "Not specified"}
+                  </p>
+                  <p>
+                    <strong>Project Type:</strong>{" "}
+                    {companyDetailsModal.project.projectType ||
+                      companyDetailsModal.project.buildingType ||
+                      "Not specified"}
+                  </p>
+                  <p>
+                    <strong>Status:</strong>{" "}
+                    {companyDetailsModal.project.status || "Not specified"}
+                  </p>
+                  <p>
+                    <strong>Submitted:</strong>{" "}
+                    {formatDate(companyDetailsModal.project.createdAt)}
+                  </p>
+                </div>
+
+                <div className="cjs-application-data">
+                  <div className="cjs-section-title">Customer Contact</div>
+                  <p>
+                    <strong>Name:</strong>{" "}
+                    {companyDetailsModal.project.customerName ||
+                      "Not specified"}
+                  </p>
+                  <p>
+                    <strong>Email:</strong>{" "}
+                    {companyDetailsModal.project.customerEmail ||
+                      "Not specified"}
+                  </p>
+                  <p>
+                    <strong>Phone:</strong>{" "}
+                    {companyDetailsModal.project.customerPhone ||
+                      "Not specified"}
+                  </p>
+                </div>
+
+                <div className="cjs-application-data">
+                  <div className="cjs-section-title">Site Details</div>
+                  <p>
+                    <strong>Address:</strong>{" "}
+                    {companyDetailsModal.project.projectAddress ||
+                      "Not specified"}
+                  </p>
+                  <p>
+                    <strong>Pincode:</strong>{" "}
+                    {companyDetailsModal.project.projectLocationPincode ||
+                      "Not specified"}
+                  </p>
+                  <p>
+                    <strong>Total Area:</strong>{" "}
+                    {companyDetailsModal.project.totalArea || "Not specified"}{" "}
+                    sq.ft
+                  </p>
+                  <p>
+                    <strong>Building Type:</strong>{" "}
+                    {companyDetailsModal.project.buildingType ||
+                      "Not specified"}
+                  </p>
+                </div>
+
+                <div className="cjs-application-data">
+                  <div className="cjs-section-title">Requirements</div>
+                  <p>
+                    <strong>Budget:</strong>{" "}
+                    {companyDetailsModal.project.estimatedBudget != null
+                      ? `₹${companyDetailsModal.project.estimatedBudget.toLocaleString("en-IN")}`
+                      : "Not specified"}
+                  </p>
+                  <p>
+                    <strong>Timeline:</strong>{" "}
+                    {companyDetailsModal.project.projectTimeline ||
+                      "Not specified"}{" "}
+                    months
+                  </p>
+                  <p>
+                    <strong>Total Floors:</strong>{" "}
+                    {companyDetailsModal.project.totalFloors || "Not specified"}
+                  </p>
+                  <p>
+                    <strong>Special Requirements:</strong>{" "}
+                    {companyDetailsModal.project.specialRequirements || "None"}
+                  </p>
+                  <p>
+                    <strong>Accessibility Needs:</strong>{" "}
+                    {companyDetailsModal.project.accessibilityNeeds || "None"}
+                  </p>
+                  <p>
+                    <strong>Energy Efficiency:</strong>{" "}
+                    {companyDetailsModal.project.energyEfficiency || "Standard"}
+                  </p>
+                </div>
+
+                <div
+                  className="cjs-application-data"
+                  style={{ gridColumn: "1 / -1" }}
+                >
+                  <div className="cjs-section-title">Floor Details</div>
+                  {companyDetailsModal.project.floors?.length > 0 ? (
+                    companyDetailsModal.project.floors.map((floor, idx) => (
+                      <p key={`${floor.floorNumber || idx}-${idx}`}>
+                        <strong>Floor {floor.floorNumber || idx + 1}:</strong>{" "}
+                        Type: {floor.floorType || "Not specified"}, Area:{" "}
+                        {floor.floorArea || "Not specified"} sq.ft, Description:{" "}
+                        {floor.floorDescription || "Not provided"}
+                      </p>
+                    ))
+                  ) : (
+                    <p>No floor details provided.</p>
+                  )}
+                </div>
+
+                <div
+                  className="cjs-application-data"
+                  style={{ gridColumn: "1 / -1" }}
+                >
+                  <div className="cjs-section-title">Uploaded Site Files</div>
+                  {companyDetailsModal.project.siteFilepaths?.length > 0 ? (
+                    <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                      {companyDetailsModal.project.siteFilepaths.map(
+                        (file, idx) => (
+                          <li key={`${file}-${idx}`}>
+                            <a href={file} target="_blank" rel="noreferrer">
+                              File {idx + 1}
+                            </a>
+                          </li>
+                        ),
+                      )}
+                    </ul>
+                  ) : (
+                    <p>No files uploaded.</p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

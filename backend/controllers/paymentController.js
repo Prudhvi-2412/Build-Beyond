@@ -544,12 +544,10 @@ const createWorkerPaymentOrder = async (req, res) => {
       req.body;
 
     if (!projectId || !projectType || !paymentType) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "projectId, projectType and paymentType are required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "projectId, projectType and paymentType are required",
+      });
     }
 
     if (!["architect", "interior"].includes(projectType)) {
@@ -559,12 +557,10 @@ const createWorkerPaymentOrder = async (req, res) => {
     }
 
     if (!["deposit", "milestone"].includes(paymentType)) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "paymentType must be deposit or milestone",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "paymentType must be deposit or milestone",
+      });
     }
 
     const Project =
@@ -579,12 +575,10 @@ const createWorkerPaymentOrder = async (req, res) => {
     const targetPercentage =
       paymentType === "deposit" ? 25 : Number(milestonePercentage);
     if (!MILESTONE_PERCENTAGES.includes(targetPercentage)) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid milestone percentage. Must be 25, 50, 75, or 100",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid milestone percentage. Must be 25, 50, 75, or 100",
+      });
     }
 
     const isEscrowInitialized = Boolean(
@@ -605,12 +599,10 @@ const createWorkerPaymentOrder = async (req, res) => {
       }
 
       if (milestonePayment.paymentCollected) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: `Payment for ${targetPercentage}% milestone has already been collected`,
-          });
+        return res.status(400).json({
+          success: false,
+          message: `Payment for ${targetPercentage}% milestone has already been collected`,
+        });
       }
 
       const milestoneIndex = project.paymentDetails.milestonePayments.findIndex(
@@ -632,50 +624,87 @@ const createWorkerPaymentOrder = async (req, res) => {
       amount = Math.round(Number(milestonePayment.amount || 0));
     } else {
       if (paymentType !== "deposit") {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Escrow not initialized for this project",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Escrow not initialized for this project",
+        });
       }
 
       const finalAmount = Number(
         project.finalAmount || project.proposal?.price || 0,
       );
       if (finalAmount <= 0) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Project must have a valid final amount before payment",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Project must have a valid final amount before payment",
+        });
       }
 
       amount = Math.round((finalAmount * 25) / 100);
     }
 
     if (amount <= 0) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid milestone amount configured",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid milestone amount configured",
+      });
+    }
+
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+      return res.status(500).json({
+        success: false,
+        message: "Razorpay credentials are not configured on server",
+      });
     }
 
     const razorpay = getRazorpay();
-    const order = await razorpay.orders.create({
-      amount: amount * 100,
-      currency: "INR",
-      receipt: `wrk_${projectId}_${targetPercentage}_${Date.now()}`,
-      notes: {
-        projectId: projectId.toString(),
-        projectType,
-        paymentType,
-        milestonePercentage: String(targetPercentage),
-      },
-    });
+    const shortReceipt = `w${String(projectId).slice(-8)}m${targetPercentage}${Date.now().toString().slice(-6)}`;
+    const rawNotes = {
+      projectId: projectId.toString(),
+      projectType,
+      paymentType,
+      milestonePercentage: String(targetPercentage),
+      workerId: String(project.worker || project.workerId || ""),
+      customerId: String(project.customer || project.customerId || ""),
+    };
+    const notes = Object.fromEntries(
+      Object.entries(rawNotes)
+        .filter(([, value]) => typeof value === "string" && value.length > 0)
+        .map(([key, value]) => [key, value.slice(0, 255)]),
+    );
+
+    let order;
+    try {
+      order = await razorpay.orders.create({
+        amount: Math.round(amount * 100),
+        currency: "INR",
+        receipt: shortReceipt,
+        notes,
+      });
+    } catch (gatewayError) {
+      const gatewayMessage =
+        gatewayError?.error?.description ||
+        gatewayError?.description ||
+        gatewayError?.message ||
+        "Unknown gateway error";
+      const gatewayCode =
+        gatewayError?.error?.code || gatewayError?.code || null;
+
+      console.error("Razorpay create worker order failed:", {
+        message: gatewayMessage,
+        code: gatewayCode,
+        amount,
+        receipt: shortReceipt,
+        notes,
+      });
+
+      return res.status(502).json({
+        success: false,
+        message: "Failed to create worker payment order",
+        error: gatewayMessage,
+        code: gatewayCode,
+      });
+    }
 
     return res.json({
       success: true,
@@ -692,13 +721,11 @@ const createWorkerPaymentOrder = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating worker payment order:", error);
-    return res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to create worker payment order",
-        error: error.message,
-      });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create worker payment order",
+      error: error.message,
+    });
   }
 };
 
@@ -735,12 +762,10 @@ const verifyWorkerPayment = async (req, res) => {
     }
 
     if (isTestBypass && process.env.NODE_ENV === "production") {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "Test bypass is disabled in production",
-        });
+      return res.status(403).json({
+        success: false,
+        message: "Test bypass is disabled in production",
+      });
     }
 
     if (!["architect", "interior"].includes(projectType)) {
@@ -750,12 +775,10 @@ const verifyWorkerPayment = async (req, res) => {
     }
 
     if (!["deposit", "milestone"].includes(paymentType)) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "paymentType must be deposit or milestone",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "paymentType must be deposit or milestone",
+      });
     }
 
     if (!isTestBypass) {
@@ -765,12 +788,10 @@ const verifyWorkerPayment = async (req, res) => {
         .digest("hex");
 
       if (expectedSignature !== razorpay_signature) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Payment verification failed - invalid signature",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Payment verification failed - invalid signature",
+        });
       }
     }
 
@@ -806,13 +827,11 @@ const verifyWorkerPayment = async (req, res) => {
     return collectMilestonePayment(req, res);
   } catch (error) {
     console.error("Error verifying worker payment:", error);
-    return res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to verify worker payment",
-        error: error.message,
-      });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to verify worker payment",
+      error: error.message,
+    });
   }
 };
 
@@ -1417,20 +1436,16 @@ const createCompanyPaymentOrder = async (req, res) => {
     const targetMilestone = Number(milestonePercentage);
 
     if (!projectId || !milestonePercentage) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "projectId and milestonePercentage are required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "projectId and milestonePercentage are required",
+      });
     }
     if (![25, 50, 75, 100].includes(targetMilestone)) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "milestonePercentage must be 25, 50, 75, or 100",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "milestonePercentage must be 25, 50, 75, or 100",
+      });
     }
 
     const project = await ConstructionProjectSchema.findById(projectId);
@@ -1439,22 +1454,18 @@ const createCompanyPaymentOrder = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Project not found" });
     if (project.status !== "accepted") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Payments can only be made on accepted projects",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Payments can only be made on accepted projects",
+      });
     }
 
     const resolvedPhase = resolveCompanyPhase(project, milestonePercentage);
     if (!resolvedPhase) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Phase configuration not found for this milestone",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Phase configuration not found for this milestone",
+      });
     }
 
     ensureCompanyPaymentDetails(project);
@@ -1538,12 +1549,10 @@ const createCompanyPaymentOrder = async (req, res) => {
           Number(existingPayout.customerPaidAmount || 0),
       );
       if (remainingAmount <= CURRENCY_EPSILON) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: `Remaining payment for ${targetMilestone}% phase is already completed`,
-          });
+        return res.status(400).json({
+          success: false,
+          message: `Remaining payment for ${targetMilestone}% phase is already completed`,
+        });
       }
 
       stageRemainingAmount = remainingAmount;
@@ -1560,12 +1569,10 @@ const createCompanyPaymentOrder = async (req, res) => {
     }
 
     if (amountToCharge <= CURRENCY_EPSILON) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Computed payable amount is invalid for this phase",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Computed payable amount is invalid for this phase",
+      });
     }
 
     if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
@@ -1686,13 +1693,11 @@ const createCompanyPaymentOrder = async (req, res) => {
       message: error?.message,
       stack: error?.stack,
     });
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to create payment order",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Failed to create payment order",
+      error: error.message,
+    });
   }
 };
 
@@ -1727,22 +1732,18 @@ const verifyCompanyPayment = async (req, res) => {
       !isTestBypass &&
       (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature)
     ) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message:
-            "projectId, razorpay_order_id, razorpay_payment_id and razorpay_signature are required",
-        });
+      return res.status(400).json({
+        success: false,
+        message:
+          "projectId, razorpay_order_id, razorpay_payment_id and razorpay_signature are required",
+      });
     }
 
     if (isTestBypass && process.env.NODE_ENV === "production") {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "Test payment bypass is disabled in production",
-        });
+      return res.status(403).json({
+        success: false,
+        message: "Test payment bypass is disabled in production",
+      });
     }
 
     if (!isTestBypass) {
@@ -1753,12 +1754,10 @@ const verifyCompanyPayment = async (req, res) => {
         .digest("hex");
 
       if (expectedSignature !== razorpay_signature) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Payment verification failed — invalid signature",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Payment verification failed — invalid signature",
+        });
       }
     }
 
@@ -1825,12 +1824,10 @@ const verifyCompanyPayment = async (req, res) => {
     }
 
     if (paidChunkAmount <= CURRENCY_EPSILON) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Unable to determine paid amount for this payment",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Unable to determine paid amount for this payment",
+      });
     }
 
     const totalPhaseAmount = roundCurrency(Number(payout.amount || 0));
@@ -1851,12 +1848,10 @@ const verifyCompanyPayment = async (req, res) => {
 
     if (payout.status === "pending") {
       if (upfrontTarget <= CURRENCY_EPSILON) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Invalid initial amount configured for this phase",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Invalid initial amount configured for this phase",
+        });
       }
 
       const remainingUpfront = roundCurrency(
@@ -1867,12 +1862,10 @@ const verifyCompanyPayment = async (req, res) => {
       );
 
       if (appliedUpfrontAmount <= CURRENCY_EPSILON) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Initial payment is already complete for this phase",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Initial payment is already complete for this phase",
+        });
       }
 
       payout.razorpayPaymentId = razorpay_payment_id;
@@ -1948,24 +1941,20 @@ const verifyCompanyPayment = async (req, res) => {
         Number(payout.amount || 0) - Number(payout.customerPaidAmount || 0),
       );
       if (remainingCompletionAmount <= CURRENCY_EPSILON) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Remaining amount is already paid for this phase",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Remaining amount is already paid for this phase",
+        });
       }
 
       const appliedCompletionAmount = roundCurrency(
         Math.min(remainingCompletionAmount, paidChunkAmount),
       );
       if (appliedCompletionAmount <= CURRENCY_EPSILON) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Unable to apply installment for completion payment",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Unable to apply installment for completion payment",
+        });
       }
 
       payout.razorpayPaymentId = razorpay_payment_id;
@@ -2097,13 +2086,11 @@ const verifyCompanyPayment = async (req, res) => {
     });
   } catch (error) {
     console.error("Error verifying company payment:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to verify payment",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Failed to verify payment",
+      error: error.message,
+    });
   }
 };
 
@@ -2118,12 +2105,10 @@ const releaseCompanyMilestonePayment = async (req, res) => {
     const { projectId, milestonePercentage } = req.body;
 
     if (!projectId || !milestonePercentage) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "projectId and milestonePercentage are required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "projectId and milestonePercentage are required",
+      });
     }
 
     const project = await ConstructionProjectSchema.findById(projectId);
@@ -2138,12 +2123,10 @@ const releaseCompanyMilestonePayment = async (req, res) => {
       (p) => Number(p.milestonePercentage) === Number(milestonePercentage),
     );
     if (!payout) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "No payment record found for this milestone.",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "No payment record found for this milestone.",
+      });
     }
 
     if (payout.status === "released") {
@@ -2255,13 +2238,11 @@ const releaseCompanyMilestonePayment = async (req, res) => {
     });
   } catch (error) {
     console.error("Error releasing company payout:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to release payout",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Failed to release payout",
+      error: error.message,
+    });
   }
 };
 
@@ -2309,13 +2290,11 @@ const getPendingCompanyPlatformFees = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching pending company platform fees:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to fetch platform fee queue",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch platform fee queue",
+      error: error.message,
+    });
   }
 };
 
@@ -2324,12 +2303,10 @@ const collectCompanyPlatformFee = async (req, res) => {
     const { projectId, milestonePercentage, notes } = req.body;
 
     if (!projectId || !milestonePercentage) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "projectId and milestonePercentage are required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "projectId and milestonePercentage are required",
+      });
     }
 
     const project = await ConstructionProjectSchema.findById(projectId);
@@ -2344,12 +2321,10 @@ const collectCompanyPlatformFee = async (req, res) => {
       payout.status !== "released" ||
       payout.platformFeeStatus !== "pending"
     ) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "No pending platform fee found for this phase",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "No pending platform fee found for this phase",
+      });
     }
 
     payout.platformFeeStatus = "collected";
@@ -2401,13 +2376,11 @@ const collectCompanyPlatformFee = async (req, res) => {
     });
   } catch (error) {
     console.error("Error collecting company platform fee:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to collect platform fee",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Failed to collect platform fee",
+      error: error.message,
+    });
   }
 };
 
@@ -2416,12 +2389,10 @@ const createCompanyPlatformFeeOrder = async (req, res) => {
     const { projectId, milestonePercentage } = req.body;
 
     if (!projectId || !milestonePercentage) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "projectId and milestonePercentage are required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "projectId and milestonePercentage are required",
+      });
     }
 
     const project = await ConstructionProjectSchema.findById(projectId);
@@ -2432,24 +2403,20 @@ const createCompanyPlatformFeeOrder = async (req, res) => {
 
     const requesterId = req.user?.user_id ? String(req.user.user_id) : null;
     if (!requesterId || String(project.companyId) !== requesterId) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "Not authorized to pay platform fee for this project",
-        });
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to pay platform fee for this project",
+      });
     }
 
     ensureCompanyPaymentDetails(project);
 
     const payout = findCompanyPayout(project, milestonePercentage);
     if (!payout || payout.status !== "released") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Platform fee is available only after phase payout release",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Platform fee is available only after phase payout release",
+      });
     }
 
     if (
@@ -2461,22 +2428,18 @@ const createCompanyPlatformFeeOrder = async (req, res) => {
     }
 
     if (payout.platformFeeStatus === "collected") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Platform fee is already paid for this phase",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Platform fee is already paid for this phase",
+      });
     }
 
     const platformFeeAmount = roundCurrency(Number(payout.platformFee || 0));
     if (platformFeeAmount <= 0) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Platform fee amount is invalid for this phase",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Platform fee amount is invalid for this phase",
+      });
     }
 
     if (platformFeeAmount > RAZORPAY_MAX_ORDER_AMOUNT_INR) {
@@ -2530,13 +2493,11 @@ const createCompanyPlatformFeeOrder = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating company platform fee order:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to create platform fee order",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Failed to create platform fee order",
+      error: error.message,
+    });
   }
 };
 
@@ -2572,12 +2533,10 @@ const verifyCompanyPlatformFeePayment = async (req, res) => {
     }
 
     if (isTestBypass && process.env.NODE_ENV === "production") {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "Test payment bypass is disabled in production",
-        });
+      return res.status(403).json({
+        success: false,
+        message: "Test payment bypass is disabled in production",
+      });
     }
 
     if (!isTestBypass) {
@@ -2587,12 +2546,10 @@ const verifyCompanyPlatformFeePayment = async (req, res) => {
         .digest("hex");
 
       if (expectedSignature !== razorpay_signature) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Payment verification failed - invalid signature",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Payment verification failed - invalid signature",
+        });
       }
     }
 
@@ -2604,12 +2561,10 @@ const verifyCompanyPlatformFeePayment = async (req, res) => {
 
     const requesterId = req.user?.user_id ? String(req.user.user_id) : null;
     if (!requesterId || String(project.companyId) !== requesterId) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "Not authorized to verify platform fee for this project",
-        });
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to verify platform fee for this project",
+      });
     }
 
     ensureCompanyPaymentDetails(project);
@@ -2629,12 +2584,10 @@ const verifyCompanyPlatformFeePayment = async (req, res) => {
       payout.status !== "released" ||
       payout.platformFeeStatus !== "pending"
     ) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "No pending platform fee found for this phase",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "No pending platform fee found for this phase",
+      });
     }
 
     if (
@@ -2642,12 +2595,10 @@ const verifyCompanyPlatformFeePayment = async (req, res) => {
       payout.platformFeeRazorpayOrderId &&
       payout.platformFeeRazorpayOrderId !== razorpay_order_id
     ) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Order mismatch for this platform fee payment",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Order mismatch for this platform fee payment",
+      });
     }
 
     const transactionOrderId =
@@ -2710,13 +2661,11 @@ const verifyCompanyPlatformFeePayment = async (req, res) => {
     });
   } catch (error) {
     console.error("Error verifying company platform fee payment:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to verify platform fee payment",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Failed to verify platform fee payment",
+      error: error.message,
+    });
   }
 };
 
@@ -2780,13 +2729,11 @@ const getCompanyProjectPaymentSummary = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching company payment summary:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to fetch payment summary",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch payment summary",
+      error: error.message,
+    });
   }
 };
 

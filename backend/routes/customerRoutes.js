@@ -28,6 +28,8 @@ const {
   rejectMilestone,
   requestMilestoneRevision,
   reportMilestoneToAdmin,
+  getEditableRequestDetails,
+  updateEditableRequest,
   getArchitectHiringDetails,
   getDesignRequestDetails,
   getPaymentHistory,
@@ -115,6 +117,18 @@ router.post(
   "/customer/milestone/report-to-admin/:projectId/:milestoneId",
   auth,
   reportMilestoneToAdmin,
+);
+
+router.get(
+  "/customer/editable-request/:type/:projectId",
+  auth,
+  getEditableRequestDetails,
+);
+router.put(
+  "/customer/editable-request/:type/:projectId",
+  auth,
+  upload.any(),
+  updateEditableRequest,
 );
 
 // Review routes

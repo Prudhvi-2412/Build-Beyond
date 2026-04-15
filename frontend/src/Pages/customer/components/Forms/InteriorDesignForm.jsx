@@ -15,9 +15,16 @@ const InteriorDesignForm = () => {
 
   // ---------- Worker ID from URL ----------
   const [workerId, setWorkerId] = useState("");
+  const [editId, setEditId] = useState("");
+  const [loadingExistingRequest, setLoadingExistingRequest] = useState(false);
+  const [selectedWorker, setSelectedWorker] = useState(null);
+  const [workerDetailsLoading, setWorkerDetailsLoading] = useState(false);
+  const isEditMode = Boolean(editId);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     setWorkerId(params.get("workerId") || "");
+    setEditId(params.get("editId") || "");
   }, [location.search]);
 
   // ---------- Form state ----------
@@ -106,6 +113,105 @@ const InteriorDesignForm = () => {
   const [currentPreviews, setCurrentPreviews] = useState([]);
   const [inspirationFiles, setInspirationFiles] = useState([]);
   const [inspirationPreviews, setInspirationPreviews] = useState([]);
+  const [existingCurrentImages, setExistingCurrentImages] = useState([]);
+  const [existingInspirationImages, setExistingInspirationImages] = useState(
+    [],
+  );
+
+  useEffect(() => {
+    if (!editId) return;
+
+    const fetchEditableRequest = async () => {
+      try {
+        setLoadingExistingRequest(true);
+        const res = await axios.get(
+          `/api/customer/editable-request/interior/${editId}`,
+          { withCredentials: true },
+        );
+
+        const request = res.data?.request;
+        if (!request) return;
+
+        setFormData((prev) => ({
+          ...prev,
+          projectName: request.projectName || "",
+          fullName: request.fullName || "",
+          email: request.email || "",
+          phone: request.phone || "",
+          address: request.address || "",
+          roomType: request.roomType || "",
+          roomLength:
+            request.roomLength !== undefined && request.roomLength !== null
+              ? String(request.roomLength)
+              : "",
+          roomWidth:
+            request.roomWidth !== undefined && request.roomWidth !== null
+              ? String(request.roomWidth)
+              : "",
+          dimensionUnit: request.dimensionUnit || "feet",
+          ceilingHeight:
+            request.ceilingHeight !== undefined &&
+            request.ceilingHeight !== null
+              ? String(request.ceilingHeight)
+              : "",
+          heightUnit: request.heightUnit || request.dimensionUnit || "feet",
+          designPreference: request.designPreference || "",
+          projectDescription: request.projectDescription || "",
+        }));
+
+        setFloorRequirements(
+          Array.isArray(request.floorRequirements) &&
+            request.floorRequirements.length > 0
+            ? request.floorRequirements
+            : [{ floorNumber: 1, details: "" }],
+        );
+
+        setExistingCurrentImages(request.currentRoomImages || []);
+        setExistingInspirationImages(request.inspirationImages || []);
+
+        if (request.workerId) {
+          setWorkerId(request.workerId);
+        }
+      } catch (error) {
+        alert(
+          error.response?.data?.error ||
+            "This request cannot be edited right now.",
+        );
+        navigate("/customerdashboard/job_status");
+      } finally {
+        setLoadingExistingRequest(false);
+      }
+    };
+
+    fetchEditableRequest();
+  }, [editId, navigate]);
+
+  useEffect(() => {
+    if (!workerId) {
+      setSelectedWorker(null);
+      return;
+    }
+
+    const fetchWorkerDetails = async () => {
+      try {
+        setWorkerDetailsLoading(true);
+        const res = await axios.get("/api/interior_designer", {
+          withCredentials: true,
+        });
+        const designers = res.data?.designers || [];
+        const matchedWorker = designers.find(
+          (worker) => String(worker._id) === String(workerId),
+        );
+        setSelectedWorker(matchedWorker || null);
+      } catch (error) {
+        setSelectedWorker(null);
+      } finally {
+        setWorkerDetailsLoading(false);
+      }
+    };
+
+    fetchWorkerDetails();
+  }, [workerId]);
 
   const handleFileChange = (e, type) => {
     const files = Array.from(e.target.files);
@@ -143,6 +249,7 @@ const InteriorDesignForm = () => {
 
   // ---------- Validation ----------
   const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validateForm = () => {
     const newErrors = {};
@@ -194,7 +301,7 @@ const InteriorDesignForm = () => {
       newErrors.projectDescription = "Please enter a project description";
 
     // Current Room Images
-    if (currentFiles.length === 0)
+    if (currentFiles.length === 0 && existingCurrentImages.length === 0)
       newErrors.currentRoomImages = "Please upload at least one room photo";
 
     setErrors(newErrors);
@@ -204,8 +311,10 @@ const InteriorDesignForm = () => {
   // ---------- Submit ----------
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!validateForm()) return;
 
+    setIsSubmitting(true);
     const submitData = new FormData();
     submitData.append("workerId", workerId);
 
@@ -215,6 +324,14 @@ const InteriorDesignForm = () => {
 
     // Append floorRequirements as JSON string (backend should parse it)
     submitData.append("floorRequirements", JSON.stringify(floorRequirements));
+    submitData.append(
+      "existingCurrentRoomImages",
+      JSON.stringify(existingCurrentImages),
+    );
+    submitData.append(
+      "existingInspirationImages",
+      JSON.stringify(existingInspirationImages),
+    );
 
     currentFiles.forEach((file) =>
       submitData.append("currentRoomImages", file),
@@ -224,405 +341,489 @@ const InteriorDesignForm = () => {
     );
 
     try {
-      const response = await axios.post("/api/design_request", submitData, {
+      const endpoint = isEditMode
+        ? `/api/customer/editable-request/interior/${editId}`
+        : "/api/design_request";
+      const method = isEditMode ? "put" : "post";
+
+      const response = await axios({
+        method,
+        url: endpoint,
+        data: submitData,
         headers: { "Content-Type": "multipart/form-data" },
+        withCredentials: true,
       });
 
       if (response.data.success) {
+        if (isEditMode) {
+          alert("Request updated successfully!");
+        }
         navigate("/customerdashboard/job_status");
+        return;
       } else {
         alert(response.data.error || "An error occurred. Please try again.");
       }
     } catch (error) {
       alert("Failed to submit form. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
+  if (loadingExistingRequest) {
+    return <div className="interior-form-container">Loading request...</div>;
+  }
 
   return (
     <div className="interior-form-container">
       <div className="interior-form-page-title">
-        <h1>Interior Design Request Form</h1>
+        <h1>
+          {isEditMode
+            ? "Edit Interior Design Request"
+            : "Interior Design Request Form"}
+        </h1>
         <div className="interior-form-underline"></div>
       </div>
 
-      <form onSubmit={handleSubmit} noValidate>
-        <input type="hidden" name="workerId" value={workerId} />
-
-        {/* Customer Details */}
-        <div className="interior-form-section">
-          <h2 className="interior-form-section-title">Customer Details</h2>
-          <div className="interior-form-form-grid">
-            <div className="interior-form-form-group">
-              <label htmlFor="projectName">Project Name*</label>
-              <input
-                type="text"
-                id="projectName"
-                name="projectName"
-                value={formData.projectName}
-                onChange={handleInputChange}
-              />
-              {errors.projectName && (
-                <div className="interior-form-error-text">
-                  {errors.projectName}
-                </div>
-              )}
-            </div>
-
-            <div className="interior-form-form-group">
-              <label htmlFor="fullName">Full Name*</label>
-              <input
-                type="text"
-                id="fullName"
-                name="fullName"
-                value={formData.fullName}
-                onChange={handleInputChange}
-              />
-              {errors.fullName && (
-                <div className="interior-form-error-text">
-                  {errors.fullName}
-                </div>
-              )}
-            </div>
-
-            <div className="interior-form-form-group">
-              <label htmlFor="email">Email Address*</label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-              />
-              {errors.email && (
-                <div className="interior-form-error-text">{errors.email}</div>
-              )}
-            </div>
-
-            <div className="interior-form-form-group">
-              <label htmlFor="phone">Phone Number*</label>
-              <input
-                type="tel"
-                id="phone"
-                name="phone"
-                value={formData.phone}
-                onChange={handleInputChange}
-              />
-              {errors.phone && (
-                <div className="interior-form-error-text">{errors.phone}</div>
-              )}
-            </div>
-          </div>
-
-          <div className="interior-form-form-group">
-            <label htmlFor="address">Home Address*</label>
-            <input
-              type="text"
-              id="address"
-              name="address"
-              value={formData.address}
-              onChange={handleInputChange}
-            />
-            {errors.address && (
-              <div className="interior-form-error-text">{errors.address}</div>
-            )}
-          </div>
-        </div>
-
-        {/* Project Details */}
-        <div className="interior-form-section">
-          <h2 className="interior-form-section-title">Project Details</h2>
-
-          {/* Floor Requirements */}
-          <div className="interior-form-form-group">
-            <label>Floor Requirements</label>
-            {floorRequirements.map((floor, idx) => (
-              <div
-                key={idx}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  marginBottom: 8,
-                }}
-              >
-                <span style={{ marginRight: 8 }}>
-                  Floor {floor.floorNumber}:
-                </span>
-                <input
-                  type="text"
-                  placeholder="Describe requirements for this floor"
-                  value={floor.details}
-                  onChange={(e) =>
-                    handleFloorChange(idx, "details", e.target.value)
-                  }
-                  style={{ flex: 1, marginRight: 8 }}
-                />
-                <button
-                  type="button"
-                  onClick={() => removeFloorRequirement(idx)}
-                  disabled={floorRequirements.length === 1}
-                  style={{ marginRight: 4 }}
-                >
-                  -
-                </button>
-                {idx === floorRequirements.length - 1 && (
-                  <button type="button" onClick={addFloorRequirement}>
-                    +
-                  </button>
-                )}
-              </div>
-            ))}
-            <p className="interior-form-info-text">
-              Add requirements for each floor (optional, but helps us understand
-              your needs).
-            </p>
-          </div>
-
-          <div className="interior-form-form-group">
-            <label>Room Type*</label>
-            <div className="interior-form-room-selector">
-              {[
-                { value: "Kitchen", label: "Kitchen" },
-                { value: "Living Room", label: "Living Room" },
-                { value: "Bedroom", label: "Bedroom" },
-                { value: "Bathroom", label: "Bathroom" },
-                { value: "Dining Room", label: "Dining Room" },
-                { value: "Other", label: "Other" },
-              ].map((room) => (
-                <div key={room.value} className="interior-form-room-option">
-                  <input
-                    type="radio"
-                    id={room.value.toLowerCase().replace(" ", "")}
-                    name="roomType"
-                    value={room.value}
-                    checked={formData.roomType === room.value}
-                    onChange={handleInputChange}
-                  />
-                  <label htmlFor={room.value.toLowerCase().replace(" ", "")}>
-                    {room.label}
-                  </label>
-                </div>
-              ))}
-            </div>
-            {errors.roomType && (
-              <div className="interior-form-error-text">{errors.roomType}</div>
-            )}
-          </div>
-
-          <div className="interior-form-form-grid">
-            <div className="interior-form-form-group">
-              <label>Room Size*</label>
-              <div className="interior-form-dimension-inputs">
-                <input
-                  type="number"
-                  id="roomLength"
-                  name="roomLength"
-                  placeholder="Length"
-                  min="0.01"
-                  step="0.01"
-                  value={formData.roomLength}
-                  onChange={handleInputChange}
-                />
-                <span>×</span>
-                <input
-                  type="number"
-                  id="roomWidth"
-                  name="roomWidth"
-                  placeholder="Width"
-                  min="0.01"
-                  step="0.01"
-                  value={formData.roomWidth}
-                  onChange={handleInputChange}
-                />
-                <select
-                  id="dimensionUnit"
-                  name="dimensionUnit"
-                  value={formData.dimensionUnit}
-                  onChange={handleInputChange}
-                  className="interior-form-dimension-unit"
-                >
-                  <option value="feet">feet</option>
-                  <option value="meters">meters</option>
-                </select>
-              </div>
-              {errors.roomSize && (
-                <div className="interior-form-error-text">
-                  {errors.roomSize}
-                </div>
-              )}
-              <p className="interior-form-info-text">
-                Please enter the approximate dimensions of your room
+      <div className="interior-form-content-layout">
+        <aside className="interior-form-verification-panel">
+          <h3>Worker Details</h3>
+          {workerDetailsLoading ? (
+            <p>Loading worker details...</p>
+          ) : selectedWorker ? (
+            <div className="interior-form-verification-list">
+              <p>
+                <strong>Name:</strong> {selectedWorker.name || "Not available"}
+              </p>
+              <p>
+                <strong>Specialization:</strong>{" "}
+                {selectedWorker.specialization || "Not available"}
+              </p>
+              <p>
+                <strong>Experience:</strong>{" "}
+                {selectedWorker.experience !== undefined &&
+                selectedWorker.experience !== null
+                  ? `${selectedWorker.experience} years`
+                  : "Not available"}
+              </p>
+              <p>
+                <strong>Email:</strong>{" "}
+                {selectedWorker.email || "Not available"}
+              </p>
+              <p>
+                <strong>Phone:</strong>{" "}
+                {selectedWorker.phone || "Not available"}
               </p>
             </div>
+          ) : (
+            <p>No worker selected for this request yet.</p>
+          )}
+        </aside>
 
-            <div className="interior-form-form-group">
-              <label>Ceiling Height*</label>
-              <div className="interior-form-dimension-inputs">
+        <div className="interior-form-main-content">
+          <form onSubmit={handleSubmit} noValidate>
+            <input type="hidden" name="workerId" value={workerId} />
+
+            {/* Customer Details */}
+            <div className="interior-form-section">
+              <h2 className="interior-form-section-title">Customer Details</h2>
+              <div className="interior-form-form-grid">
+                <div className="interior-form-form-group">
+                  <label htmlFor="projectName">Project Name*</label>
+                  <input
+                    type="text"
+                    id="projectName"
+                    name="projectName"
+                    value={formData.projectName}
+                    onChange={handleInputChange}
+                  />
+                  {errors.projectName && (
+                    <div className="interior-form-error-text">
+                      {errors.projectName}
+                    </div>
+                  )}
+                </div>
+
+                <div className="interior-form-form-group">
+                  <label htmlFor="fullName">Full Name*</label>
+                  <input
+                    type="text"
+                    id="fullName"
+                    name="fullName"
+                    value={formData.fullName}
+                    onChange={handleInputChange}
+                  />
+                  {errors.fullName && (
+                    <div className="interior-form-error-text">
+                      {errors.fullName}
+                    </div>
+                  )}
+                </div>
+
+                <div className="interior-form-form-group">
+                  <label htmlFor="email">Email Address*</label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                  />
+                  {errors.email && (
+                    <div className="interior-form-error-text">
+                      {errors.email}
+                    </div>
+                  )}
+                </div>
+
+                <div className="interior-form-form-group">
+                  <label htmlFor="phone">Phone Number*</label>
+                  <input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                  />
+                  {errors.phone && (
+                    <div className="interior-form-error-text">
+                      {errors.phone}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="interior-form-form-group">
+                <label htmlFor="address">Home Address*</label>
                 <input
-                  type="number"
-                  id="ceilingHeight"
-                  name="ceilingHeight"
-                  placeholder="Height"
-                  min="0.01"
-                  step="0.01"
-                  value={formData.ceilingHeight}
+                  type="text"
+                  id="address"
+                  name="address"
+                  value={formData.address}
                   onChange={handleInputChange}
                 />
+                {errors.address && (
+                  <div className="interior-form-error-text">
+                    {errors.address}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Project Details */}
+            <div className="interior-form-section">
+              <h2 className="interior-form-section-title">Project Details</h2>
+
+              {/* Floor Requirements */}
+              <div className="interior-form-form-group">
+                <label>Floor Requirements</label>
+                {floorRequirements.map((floor, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      marginBottom: 8,
+                    }}
+                  >
+                    <span style={{ marginRight: 8 }}>
+                      Floor {floor.floorNumber}:
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Describe requirements for this floor"
+                      value={floor.details}
+                      onChange={(e) =>
+                        handleFloorChange(idx, "details", e.target.value)
+                      }
+                      style={{ flex: 1, marginRight: 8 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeFloorRequirement(idx)}
+                      disabled={floorRequirements.length === 1}
+                      style={{ marginRight: 4 }}
+                    >
+                      -
+                    </button>
+                    {idx === floorRequirements.length - 1 && (
+                      <button type="button" onClick={addFloorRequirement}>
+                        +
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <p className="interior-form-info-text">
+                  Add requirements for each floor (optional, but helps us
+                  understand your needs).
+                </p>
+              </div>
+
+              <div className="interior-form-form-group">
+                <label>Room Type*</label>
+                <div className="interior-form-room-selector">
+                  {[
+                    { value: "Kitchen", label: "Kitchen" },
+                    { value: "Living Room", label: "Living Room" },
+                    { value: "Bedroom", label: "Bedroom" },
+                    { value: "Bathroom", label: "Bathroom" },
+                    { value: "Dining Room", label: "Dining Room" },
+                    { value: "Other", label: "Other" },
+                  ].map((room) => (
+                    <div key={room.value} className="interior-form-room-option">
+                      <input
+                        type="radio"
+                        id={room.value.toLowerCase().replace(" ", "")}
+                        name="roomType"
+                        value={room.value}
+                        checked={formData.roomType === room.value}
+                        onChange={handleInputChange}
+                      />
+                      <label
+                        htmlFor={room.value.toLowerCase().replace(" ", "")}
+                      >
+                        {room.label}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {errors.roomType && (
+                  <div className="interior-form-error-text">
+                    {errors.roomType}
+                  </div>
+                )}
+              </div>
+
+              <div className="interior-form-form-grid">
+                <div className="interior-form-form-group">
+                  <label>Room Size*</label>
+                  <div className="interior-form-dimension-inputs">
+                    <input
+                      type="number"
+                      id="roomLength"
+                      name="roomLength"
+                      placeholder="Length"
+                      min="0.01"
+                      step="0.01"
+                      value={formData.roomLength}
+                      onChange={handleInputChange}
+                    />
+                    <span>×</span>
+                    <input
+                      type="number"
+                      id="roomWidth"
+                      name="roomWidth"
+                      placeholder="Width"
+                      min="0.01"
+                      step="0.01"
+                      value={formData.roomWidth}
+                      onChange={handleInputChange}
+                    />
+                    <select
+                      id="dimensionUnit"
+                      name="dimensionUnit"
+                      value={formData.dimensionUnit}
+                      onChange={handleInputChange}
+                      className="interior-form-dimension-unit"
+                    >
+                      <option value="feet">feet</option>
+                      <option value="meters">meters</option>
+                    </select>
+                  </div>
+                  {errors.roomSize && (
+                    <div className="interior-form-error-text">
+                      {errors.roomSize}
+                    </div>
+                  )}
+                  <p className="interior-form-info-text">
+                    Please enter the approximate dimensions of your room
+                  </p>
+                </div>
+
+                <div className="interior-form-form-group">
+                  <label>Ceiling Height*</label>
+                  <div className="interior-form-dimension-inputs">
+                    <input
+                      type="number"
+                      id="ceilingHeight"
+                      name="ceilingHeight"
+                      placeholder="Height"
+                      min="0.01"
+                      step="0.01"
+                      value={formData.ceilingHeight}
+                      onChange={handleInputChange}
+                    />
+                    <select
+                      id="heightUnit"
+                      name="heightUnit"
+                      value={formData.heightUnit}
+                      onChange={handleInputChange}
+                      className="interior-form-dimension-unit"
+                    >
+                      <option value="feet">feet</option>
+                      <option value="meters">meters</option>
+                    </select>
+                  </div>
+                  {errors.ceilingHeight && (
+                    <div className="interior-form-error-text">
+                      {errors.ceilingHeight}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="interior-form-form-group">
+                <label htmlFor="designPreference">Design Preference*</label>
                 <select
-                  id="heightUnit"
-                  name="heightUnit"
-                  value={formData.heightUnit}
+                  id="designPreference"
+                  name="designPreference"
+                  value={formData.designPreference}
                   onChange={handleInputChange}
-                  className="interior-form-dimension-unit"
                 >
-                  <option value="feet">feet</option>
-                  <option value="meters">meters</option>
+                  <option value="">Select a style</option>
+                  <option value="Modern">Modern</option>
+                  <option value="Traditional">Traditional</option>
+                  <option value="Scandinavian">Scandinavian</option>
+                  <option value="Industrial">Industrial</option>
+                  <option value="Bohemian">Bohemian</option>
+                  <option value="Minimalist">Minimalist</option>
+                  <option value="Rustic">Rustic</option>
+                  <option value="Contemporary">Contemporary</option>
                 </select>
+                {errors.designPreference && (
+                  <div className="interior-form-error-text">
+                    {errors.designPreference}
+                  </div>
+                )}
               </div>
-              {errors.ceilingHeight && (
-                <div className="interior-form-error-text">
-                  {errors.ceilingHeight}
-                </div>
-              )}
-            </div>
-          </div>
 
-          <div className="interior-form-form-group">
-            <label htmlFor="designPreference">Design Preference*</label>
-            <select
-              id="designPreference"
-              name="designPreference"
-              value={formData.designPreference}
-              onChange={handleInputChange}
+              <div className="interior-form-form-group">
+                <label htmlFor="projectDescription">Project Description*</label>
+                <textarea
+                  id="projectDescription"
+                  name="projectDescription"
+                  rows="4"
+                  placeholder="Tell us more about your vision for this space..."
+                  value={formData.projectDescription}
+                  onChange={handleInputChange}
+                />
+                {errors.projectDescription && (
+                  <div className="interior-form-error-text">
+                    {errors.projectDescription}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Upload Photos */}
+            <div className="interior-form-section">
+              <h2 className="interior-form-section-title">Upload Photos</h2>
+
+              <div className="interior-form-image-section">
+                <h3>Current Room Photos*</h3>
+                <p>
+                  Upload photos of your current space to help our designers
+                  understand its layout, dimensions, and style.
+                </p>
+                <div className="interior-form-file-upload">
+                  <label
+                    className="interior-form-file-upload-label"
+                    htmlFor="currentRoomImages"
+                  >
+                    <i className="fa-solid fa-cloud-arrow-up"></i>
+                    <span>Upload current room photos</span>
+                    <small>(Max 3 images)</small>
+                  </label>
+                  <input
+                    type="file"
+                    id="currentRoomImages"
+                    name="currentRoomImages"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => handleFileChange(e, "current")}
+                  />
+                </div>
+                {errors.currentRoomImages && (
+                  <div className="interior-form-error-text">
+                    {errors.currentRoomImages}
+                  </div>
+                )}
+                <div className="interior-form-preview-container">
+                  {currentPreviews.map((preview, index) => (
+                    <div key={index} className="interior-form-preview-item">
+                      <img
+                        src={preview.url}
+                        alt={`Current room ${index + 1}`}
+                      />
+                      <button
+                        type="button"
+                        className="interior-form-preview-item-remove-btn"
+                        onClick={() => removeFile(index, "current")}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="interior-form-image-section">
+                <h3 className="no-asterisk">Design Inspiration (Optional)</h3>
+                <p>
+                  Share images of designs, colors, or furniture styles you like
+                  to help us understand your preferences.
+                </p>
+                <div className="interior-form-file-upload">
+                  <label
+                    className="interior-form-file-upload-label"
+                    htmlFor="inspirationImages"
+                  >
+                    <i className="fa-solid fa-cloud-arrow-up"></i>
+                    <span>Upload inspiration images</span>
+                    <small>(Max 3 images)</small>
+                  </label>
+                  <input
+                    type="file"
+                    id="inspirationImages"
+                    name="inspirationImages"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => handleFileChange(e, "inspiration")}
+                  />
+                </div>
+                <div className="interior-form-preview-container">
+                  {inspirationPreviews.map((preview, index) => (
+                    <div key={index} className="interior-form-preview-item">
+                      <img src={preview.url} alt={`Inspiration ${index + 1}`} />
+                      <button
+                        type="button"
+                        className="interior-form-preview-item-remove-btn"
+                        onClick={() => removeFile(index, "inspiration")}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="interior-form-btn-submit"
+              disabled={isSubmitting}
             >
-              <option value="">Select a style</option>
-              <option value="Modern">Modern</option>
-              <option value="Traditional">Traditional</option>
-              <option value="Scandinavian">Scandinavian</option>
-              <option value="Industrial">Industrial</option>
-              <option value="Bohemian">Bohemian</option>
-              <option value="Minimalist">Minimalist</option>
-              <option value="Rustic">Rustic</option>
-              <option value="Contemporary">Contemporary</option>
-            </select>
-            {errors.designPreference && (
-              <div className="interior-form-error-text">
-                {errors.designPreference}
-              </div>
-            )}
-          </div>
-
-          <div className="interior-form-form-group">
-            <label htmlFor="projectDescription">Project Description*</label>
-            <textarea
-              id="projectDescription"
-              name="projectDescription"
-              rows="4"
-              placeholder="Tell us more about your vision for this space..."
-              value={formData.projectDescription}
-              onChange={handleInputChange}
-            />
-            {errors.projectDescription && (
-              <div className="interior-form-error-text">
-                {errors.projectDescription}
-              </div>
-            )}
-          </div>
+              {isSubmitting
+                ? isEditMode
+                  ? "Updating..."
+                  : "Uploading..."
+                : isEditMode
+                  ? "Update Request"
+                  : "Submit Request"}
+            </button>
+          </form>
         </div>
-
-        {/* Upload Photos */}
-        <div className="interior-form-section">
-          <h2 className="interior-form-section-title">Upload Photos</h2>
-
-          <div className="interior-form-image-section">
-            <h3>Current Room Photos*</h3>
-            <p>
-              Upload photos of your current space to help our designers
-              understand its layout, dimensions, and style.
-            </p>
-            <div className="interior-form-file-upload">
-              <label
-                className="interior-form-file-upload-label"
-                htmlFor="currentRoomImages"
-              >
-                <i className="fa-solid fa-cloud-arrow-up"></i>
-                <span>Upload current room photos</span>
-                <small>(Max 3 images)</small>
-              </label>
-              <input
-                type="file"
-                id="currentRoomImages"
-                name="currentRoomImages"
-                accept="image/*"
-                multiple
-                onChange={(e) => handleFileChange(e, "current")}
-              />
-            </div>
-            {errors.currentRoomImages && (
-              <div className="interior-form-error-text">
-                {errors.currentRoomImages}
-              </div>
-            )}
-            <div className="interior-form-preview-container">
-              {currentPreviews.map((preview, index) => (
-                <div key={index} className="interior-form-preview-item">
-                  <img src={preview.url} alt={`Current room ${index + 1}`} />
-                  <button
-                    type="button"
-                    className="interior-form-preview-item-remove-btn"
-                    onClick={() => removeFile(index, "current")}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="interior-form-image-section">
-            <h3 className="no-asterisk">Design Inspiration (Optional)</h3>
-            <p>
-              Share images of designs, colors, or furniture styles you like to
-              help us understand your preferences.
-            </p>
-            <div className="interior-form-file-upload">
-              <label
-                className="interior-form-file-upload-label"
-                htmlFor="inspirationImages"
-              >
-                <i className="fa-solid fa-cloud-arrow-up"></i>
-                <span>Upload inspiration images</span>
-                <small>(Max 3 images)</small>
-              </label>
-              <input
-                type="file"
-                id="inspirationImages"
-                name="inspirationImages"
-                accept="image/*"
-                multiple
-                onChange={(e) => handleFileChange(e, "inspiration")}
-              />
-            </div>
-            <div className="interior-form-preview-container">
-              {inspirationPreviews.map((preview, index) => (
-                <div key={index} className="interior-form-preview-item">
-                  <img src={preview.url} alt={`Inspiration ${index + 1}`} />
-                  <button
-                    type="button"
-                    className="interior-form-preview-item-remove-btn"
-                    onClick={() => removeFile(index, "inspiration")}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <button type="submit" className="interior-form-btn-submit">
-          Submit Request
-        </button>
-      </form>
+      </div>
     </div>
   );
 };

@@ -120,11 +120,11 @@ const submitDesignRequest = async (req, res) => {
       designPreference,
       projectDescription,
     } = req.body;
-    
-    console.log('=== Design Request Debug ===');
-    console.log('Received workerId:', req.body.workerId);
-    console.log('Converted worker ObjectId:', worker);
-    
+
+    console.log("=== Design Request Debug ===");
+    console.log("Received workerId:", req.body.workerId);
+    console.log("Converted worker ObjectId:", worker);
+
     if (
       !projectName ||
       !fullName ||
@@ -168,15 +168,13 @@ const submitDesignRequest = async (req, res) => {
       workerId: worker,
     });
     await designRequest.save();
-    
-    console.log('Design request saved with workerId:', designRequest.workerId);
-    
-    res
-      .status(201)
-      .json({
-        message: "Design request submitted successfully",
-        success: true,
-      });
+
+    console.log("Design request saved with workerId:", designRequest.workerId);
+
+    res.status(201).json({
+      message: "Design request submitted successfully",
+      success: true,
+    });
   } catch (error) {
     res.status(500).json({ error: "Server error", success: false });
   }
@@ -208,7 +206,7 @@ const submitConstructionForm = async (req, res) => {
       const floorArea = req.body[`floorArea-${i}`];
       const floorDescription = req.body[`floorDescription-${i}`];
       const floorImageFile = req.files.find(
-        (file) => file.fieldname === `floorImage-${i}`
+        (file) => file.fieldname === `floorImage-${i}`,
       );
       const floorImagePath = floorImageFile ? floorImageFile.path : "";
       floors.push({
@@ -274,7 +272,7 @@ const getProjects = async (req, res) => {
 const getProjectById = async (req, res) => {
   try {
     const project = await ConstructionProjectSchema.findById(
-      req.params.id
+      req.params.id,
     ).lean();
     if (!project) return res.status(404).json({ error: "Project not found" });
     res.json(project);
@@ -319,51 +317,75 @@ const updateProject = async (req, res) => {
       const milestonePercent = parseInt(milestonePercentage);
       const checkpoints = [25, 50, 75, 100];
       const isCheckpoint = checkpoints.includes(milestonePercent);
-      
+
       // Message is required only for checkpoint values
       if (isCheckpoint && !milestoneMessage) {
-        return res.status(400).json({ message: `Checkpoint ${milestonePercent}% requires a message for the customer.` });
+        return res
+          .status(400)
+          .json({
+            message: `Checkpoint ${milestonePercent}% requires a message for the customer.`,
+          });
       }
-      
+
       // Check if milestone is valid
       if (milestonePercent < 0 || milestonePercent > 100) {
-        return res.status(400).json({ message: "Invalid milestone percentage. Must be between 0 and 100." });
+        return res
+          .status(400)
+          .json({
+            message: "Invalid milestone percentage. Must be between 0 and 100.",
+          });
       }
 
       // Check if this is an update to a checkpoint that needs revision
       const checkpointNeedingRevision = project.milestones.find(
-        m => m.percentage === milestonePercent && m.isCheckpoint && m.needsRevision
+        (m) =>
+          m.percentage === milestonePercent &&
+          m.isCheckpoint &&
+          m.needsRevision,
       );
-      
+
       // Check for backward progression (allow same percentage if checkpoint needs revision)
       const maxCompletedPercentage = project.completionPercentage || 0;
-      
-      if (!checkpointNeedingRevision && milestonePercent < maxCompletedPercentage) {
-        return res.status(400).json({ 
-          message: `Cannot move backward. Current progress is at ${maxCompletedPercentage}%. Please select a higher percentage.` 
+
+      if (
+        !checkpointNeedingRevision &&
+        milestonePercent < maxCompletedPercentage
+      ) {
+        return res.status(400).json({
+          message: `Cannot move backward. Current progress is at ${maxCompletedPercentage}%. Please select a higher percentage.`,
         });
       }
-      
+
       // Find the last checkpoint that needs approval
-      const lastApprovedCheckpoint = checkpoints.reduce((lastApproved, checkpoint) => {
-        const checkpointMilestone = project.milestones.find(
-          m => m.percentage === checkpoint && m.isCheckpoint
-        );
-        if (checkpointMilestone && checkpointMilestone.isApprovedByCustomer) {
-          return checkpoint;
-        }
-        return lastApproved;
-      }, 0);
+      const lastApprovedCheckpoint = checkpoints.reduce(
+        (lastApproved, checkpoint) => {
+          const checkpointMilestone = project.milestones.find(
+            (m) => m.percentage === checkpoint && m.isCheckpoint,
+          );
+          if (checkpointMilestone && checkpointMilestone.isApprovedByCustomer) {
+            return checkpoint;
+          }
+          return lastApproved;
+        },
+        0,
+      );
 
       // Find next checkpoint that needs approval
-      const nextCheckpoint = checkpoints.find(c => c > lastApprovedCheckpoint) || 100;
+      const nextCheckpoint =
+        checkpoints.find((c) => c > lastApprovedCheckpoint) || 100;
 
-      const previousCheckpoints = checkpoints.filter((checkpoint) => checkpoint < milestonePercent);
+      const previousCheckpoints = checkpoints.filter(
+        (checkpoint) => checkpoint < milestonePercent,
+      );
       const blockedCheckpoint = previousCheckpoints.find((checkpoint) => {
         const payout = (project.paymentDetails?.payouts || []).find(
           (entry) => Number(entry.milestonePercentage) === Number(checkpoint),
         );
-        return payout && payout.status === 'released' && payout.platformFeeStatus === 'pending';
+        return (
+          payout &&
+          payout.status === "released" &&
+          payout.platformFeeStatus === "pending"
+        );
       });
 
       if (blockedCheckpoint) {
@@ -375,35 +397,42 @@ const updateProject = async (req, res) => {
       // Check if trying to cross a checkpoint without approval
       if (milestonePercent > nextCheckpoint) {
         const pendingCheckpoint = project.milestones.find(
-          m => m.percentage === nextCheckpoint && m.isCheckpoint && !m.isApprovedByCustomer
+          (m) =>
+            m.percentage === nextCheckpoint &&
+            m.isCheckpoint &&
+            !m.isApprovedByCustomer,
         );
-        
+
         if (pendingCheckpoint) {
-          return res.status(400).json({ 
-            message: `Cannot proceed beyond ${nextCheckpoint}%. The ${nextCheckpoint}% checkpoint needs customer approval first.` 
+          return res.status(400).json({
+            message: `Cannot proceed beyond ${nextCheckpoint}%. The ${nextCheckpoint}% checkpoint needs customer approval first.`,
           });
         }
-        
-        return res.status(400).json({ 
-          message: `Cannot proceed beyond ${nextCheckpoint}%. You must reach the ${nextCheckpoint}% checkpoint and get customer approval first.` 
+
+        return res.status(400).json({
+          message: `Cannot proceed beyond ${nextCheckpoint}%. You must reach the ${nextCheckpoint}% checkpoint and get customer approval first.`,
         });
       }
 
       // If this is a checkpoint, check if it exists
       if (isCheckpoint) {
         const existingCheckpoint = project.milestones.find(
-          m => m.percentage === milestonePercent && m.isCheckpoint
+          (m) => m.percentage === milestonePercent && m.isCheckpoint,
         );
-        
+
         if (existingCheckpoint) {
           // If checkpoint exists and needs revision or was auto-generated, allow update
-          if (existingCheckpoint.needsRevision || existingCheckpoint.isAutoGenerated) {
+          if (
+            existingCheckpoint.needsRevision ||
+            existingCheckpoint.isAutoGenerated
+          ) {
             // Add company response to conversation
-            existingCheckpoint.conversation = existingCheckpoint.conversation || [];
+            existingCheckpoint.conversation =
+              existingCheckpoint.conversation || [];
             existingCheckpoint.conversation.push({
-              sender: 'company',
+              sender: "company",
               message: milestoneMessage,
-              timestamp: new Date()
+              timestamp: new Date(),
             });
             // Update the existing checkpoint message
             existingCheckpoint.companyMessage = milestoneMessage;
@@ -413,29 +442,33 @@ const updateProject = async (req, res) => {
             existingCheckpoint.submittedAt = new Date();
           } else if (existingCheckpoint.isApprovedByCustomer) {
             // Already approved, cannot update
-            return res.status(400).json({ 
-              message: `Checkpoint ${milestonePercent}% has already been approved by the customer. Cannot update.` 
+            return res.status(400).json({
+              message: `Checkpoint ${milestonePercent}% has already been approved by the customer. Cannot update.`,
             });
           } else {
             // Still pending approval, cannot resubmit
-            return res.status(400).json({ 
-              message: `Checkpoint ${milestonePercent}% has already been submitted and is awaiting customer approval.` 
+            return res.status(400).json({
+              message: `Checkpoint ${milestonePercent}% has already been submitted and is awaiting customer approval.`,
             });
           }
         } else {
           // New checkpoint - add it
           project.milestones.push({
             percentage: milestonePercent,
-            companyMessage: milestoneMessage || `Progress update to ${milestonePercent}%`,
+            companyMessage:
+              milestoneMessage || `Progress update to ${milestonePercent}%`,
             isApprovedByCustomer: false,
             needsRevision: false,
             submittedAt: new Date(),
             isCheckpoint: isCheckpoint,
-            conversation: [{
-              sender: 'company',
-              message: milestoneMessage || `Progress update to ${milestonePercent}%`,
-              timestamp: new Date()
-            }]
+            conversation: [
+              {
+                sender: "company",
+                message:
+                  milestoneMessage || `Progress update to ${milestonePercent}%`,
+                timestamp: new Date(),
+              },
+            ],
           });
         }
       } else {
@@ -448,11 +481,13 @@ const updateProject = async (req, res) => {
             needsRevision: false,
             submittedAt: new Date(),
             isCheckpoint: false,
-            conversation: [{
-              sender: 'company',
-              message: milestoneMessage,
-              timestamp: new Date()
-            }]
+            conversation: [
+              {
+                sender: "company",
+                message: milestoneMessage,
+                timestamp: new Date(),
+              },
+            ],
           });
         }
       }
@@ -463,49 +498,75 @@ const updateProject = async (req, res) => {
 
     // Determine incoming progress value (support legacy completionPercentage field)
     const incomingProgressRaw = milestonePercentage ?? completionPercentage;
-    if (incomingProgressRaw !== undefined && incomingProgressRaw !== null && incomingProgressRaw !== '') {
+    if (
+      incomingProgressRaw !== undefined &&
+      incomingProgressRaw !== null &&
+      incomingProgressRaw !== ""
+    ) {
       const progressValue = parseInt(incomingProgressRaw, 10);
       if (Number.isNaN(progressValue)) {
-        return res.status(400).json({ message: "Progress value must be a number." });
+        return res
+          .status(400)
+          .json({ message: "Progress value must be a number." });
       }
       if (progressValue < 0 || progressValue > 100) {
-        return res.status(400).json({ message: "Progress must be between 0 and 100." });
+        return res
+          .status(400)
+          .json({ message: "Progress must be between 0 and 100." });
       }
 
       const checkpoints = [25, 50, 75, 100];
       const isCheckpoint = checkpoints.includes(progressValue);
 
       // Floor = highest checkpoint reached (approved or not)
-      const reachedCheckpoints = project.milestones.filter(m => m.isCheckpoint).map(m => m.percentage);
-      const floor = reachedCheckpoints.length ? Math.max(...reachedCheckpoints) : 0;
-      const nextCheckpoint = checkpoints.find(c => c > floor) || 100;
+      const reachedCheckpoints = project.milestones
+        .filter((m) => m.isCheckpoint)
+        .map((m) => m.percentage);
+      const floor = reachedCheckpoints.length
+        ? Math.max(...reachedCheckpoints)
+        : 0;
+      const nextCheckpoint = checkpoints.find((c) => c > floor) || 100;
 
       // Cannot go below floor
       if (progressValue < floor) {
-        return res.status(400).json({ message: `Progress cannot go below ${floor}% (last checkpoint).` });
+        return res
+          .status(400)
+          .json({
+            message: `Progress cannot go below ${floor}% (last checkpoint).`,
+          });
       }
       // Cannot exceed next checkpoint band
       if (progressValue > nextCheckpoint) {
-        return res.status(400).json({ message: `You may adjust only between ${floor}% and ${nextCheckpoint}%. Reach ${nextCheckpoint}% to create the checkpoint.` });
+        return res
+          .status(400)
+          .json({
+            message: `You may adjust only between ${floor}% and ${nextCheckpoint}%. Reach ${nextCheckpoint}% to create the checkpoint.`,
+          });
       }
 
       // Require message at checkpoint
       if (isCheckpoint && !milestoneMessage) {
-        return res.status(400).json({ message: `Please include a message for the ${progressValue}% checkpoint.` });
+        return res
+          .status(400)
+          .json({
+            message: `Please include a message for the ${progressValue}% checkpoint.`,
+          });
       }
 
       if (isCheckpoint) {
-        const existingCheckpoint = project.milestones.find(m => m.isCheckpoint && m.percentage === progressValue);
+        const existingCheckpoint = project.milestones.find(
+          (m) => m.isCheckpoint && m.percentage === progressValue,
+        );
         if (!existingCheckpoint) {
           // Create new checkpoint
-            project.milestones.push({
-              percentage: progressValue,
-              companyMessage: milestoneMessage,
-              isApprovedByCustomer: false,
-              submittedAt: new Date(),
-              isCheckpoint: true,
-              needsRevision: false
-            });
+          project.milestones.push({
+            percentage: progressValue,
+            companyMessage: milestoneMessage,
+            isApprovedByCustomer: false,
+            submittedAt: new Date(),
+            isCheckpoint: true,
+            needsRevision: false,
+          });
         } else {
           // Allow re-submission if customer requested revision
           if (existingCheckpoint.needsRevision) {
@@ -516,7 +577,11 @@ const updateProject = async (req, res) => {
             existingCheckpoint.feedbackAt = undefined;
           } else if (project.completionPercentage !== progressValue) {
             // Duplicate checkpoint attempt that differs from stored completion -> block
-            return res.status(400).json({ message: `Checkpoint ${progressValue}% already recorded and waiting for customer review.` });
+            return res
+              .status(400)
+              .json({
+                message: `Checkpoint ${progressValue}% already recorded and waiting for customer review.`,
+              });
           }
           // else allow silent re-save without duplicating milestone
         }
@@ -525,7 +590,7 @@ const updateProject = async (req, res) => {
         project.recentUpdates.push({
           updateText: milestoneMessage,
           updateImagePath: null,
-          createdAt: new Date()
+          createdAt: new Date(),
         });
       }
 
@@ -541,24 +606,32 @@ const updateProject = async (req, res) => {
       project.mainImagePath = req.files.mainImage[0].path.replace(/\\/g, "/");
     if (req.files && req.files.additionalImages)
       project.additionalImagePaths = req.files.additionalImages.map((file) =>
-        file.path.replace(/\\/g, "/")
+        file.path.replace(/\\/g, "/"),
       );
-    
+
     // Handle completion images when project reaches 100%
-    if (req.files && req.files.completionImages && project.completionPercentage === 100) {
+    if (
+      req.files &&
+      req.files.completionImages &&
+      project.completionPercentage === 100
+    ) {
       const completionImagePaths = req.files.completionImages.map((file) =>
-        file.path.replace(/\\/g, "/")
+        file.path.replace(/\\/g, "/"),
       );
       // Append to existing completion images or create new array
       if (project.completionImages && project.completionImages.length > 0) {
-        project.completionImages = [...project.completionImages, ...completionImagePaths];
+        project.completionImages = [
+          ...project.completionImages,
+          ...completionImagePaths,
+        ];
       } else {
         project.completionImages = completionImagePaths;
       }
     }
-    
+
     if (updates) {
-      const updateImages = req.files && req.files.updateImages ? req.files.updateImages : [];
+      const updateImages =
+        req.files && req.files.updateImages ? req.files.updateImages : [];
       const updatesArray = Array.isArray(updates) ? updates : [updates];
       project.recentUpdates = updatesArray.map((updateText, index) => ({
         updateText: updateText || "",
@@ -589,7 +662,7 @@ const submitBid = async (req, res) => {
     if (!bidProject) throw new Error("Bid not found");
 
     const hasExistingBid = bidProject.companyBids.some(
-      (bid) => bid.companyId.toString() === companyId.toString()
+      (bid) => bid.companyId.toString() === companyId.toString(),
     );
     if (hasExistingBid) {
       await Bid.updateOne(
@@ -600,7 +673,7 @@ const submitBid = async (req, res) => {
             "companyBids.$.bidDate": new Date(),
           },
         },
-        { session }
+        { session },
       );
     } else {
       const newBid = {
@@ -612,7 +685,7 @@ const submitBid = async (req, res) => {
       await Bid.updateOne(
         { _id: bidId },
         { $push: { companyBids: newBid } },
-        { session }
+        { session },
       );
     }
 
@@ -644,10 +717,59 @@ const acceptBid = async (req, res) => {
     const companyBid = bid.companyBids.id(companyBidId);
     if (!companyBid)
       return res.status(404).json({ error: "Company bid not found" });
+
+    // Update bid status
     bid.status = "awarded";
     bid.winningBidId = companyBidId;
     await bid.save();
-    res.json({ success: true, message: "Bid accepted successfully" });
+
+    // Create a corresponding ConstructionProject so it appears in ongoing_projects
+    const platformFeeRate = 5; // 5% platform fee
+    const totalAmount = companyBid.bidPrice;
+    const platformFee = (totalAmount * platformFeeRate) / 100;
+
+    const constructionProject = new ConstructionProjectSchema({
+      projectName: bid.projectName,
+      status: "accepted", // Set to accepted so it appears in ongoing_projects
+      customerId: bid.customerId,
+      companyId: companyBid.companyId,
+      customerName: bid.customerName,
+      customerEmail: bid.customerEmail,
+      customerPhone: bid.customerPhone,
+      projectAddress: bid.projectAddress,
+      projectLocationPincode: bid.projectLocation,
+      totalArea: bid.totalArea,
+      buildingType: bid.buildingType,
+      estimatedBudget: bid.estimatedBudget,
+      projectTimeline: bid.projectTimeline,
+      totalFloors: bid.totalFloors,
+      floors: bid.floors,
+      specialRequirements: bid.specialRequirements,
+      accessibilityNeeds: bid.accessibilityNeeds,
+      energyEfficiency: bid.energyEfficiency,
+      siteFilepaths: bid.siteFiles || [],
+      paymentDetails: {
+        totalAmount: totalAmount,
+        platformFee: platformFee,
+        platformFeeRate: platformFeeRate,
+        paymentStatus: "unpaid",
+        payouts: [],
+      },
+      proposal: {
+        price: totalAmount,
+        description: `Bid accepted from ${companyBid.companyName}`,
+        phases: [],
+        sentAt: new Date(),
+      },
+    });
+
+    await constructionProject.save();
+
+    res.json({
+      success: true,
+      message: "Bid accepted successfully",
+      projectId: constructionProject._id,
+    });
   } catch (error) {
     console.error("Error accepting bid:", error);
     res.status(500).json({ error: "Server error" });
@@ -720,22 +842,32 @@ const approveMilestone = async (req, res) => {
     const customerId = req.user.user_id;
 
     if (!projectId || !milestonePercentage) {
-      return res.status(400).json({ error: "Project ID and milestone percentage are required" });
+      return res
+        .status(400)
+        .json({ error: "Project ID and milestone percentage are required" });
     }
 
     const project = await ConstructionProjectSchema.findOne({
       _id: projectId,
-      customerId: customerId
+      customerId: customerId,
     });
 
     if (!project) {
-      return res.status(404).json({ error: "Project not found or you don't have permission to approve" });
+      return res
+        .status(404)
+        .json({
+          error: "Project not found or you don't have permission to approve",
+        });
     }
 
-    const milestone = project.milestones.find(m => m.percentage === parseInt(milestonePercentage));
-    
+    const milestone = project.milestones.find(
+      (m) => m.percentage === parseInt(milestonePercentage),
+    );
+
     if (!milestone) {
-      return res.status(404).json({ error: `Milestone ${milestonePercentage}% not found` });
+      return res
+        .status(404)
+        .json({ error: `Milestone ${milestonePercentage}% not found` });
     }
 
     if (milestone.isApprovedByCustomer) {
@@ -751,7 +883,7 @@ const approveMilestone = async (req, res) => {
 
     let paymentReleaseInfo = null;
     try {
-      const { releaseCompanyMilestonePayment } = require('./paymentController');
+      const { releaseCompanyMilestonePayment } = require("./paymentController");
       paymentReleaseInfo = await new Promise((resolve, reject) => {
         const mockReq = {
           body: {
@@ -770,12 +902,14 @@ const approveMilestone = async (req, res) => {
         releaseCompanyMilestonePayment(mockReq, mockRes).catch(reject);
       });
     } catch (paymentError) {
-      console.error('Error releasing company milestone payment:', paymentError);
+      console.error("Error releasing company milestone payment:", paymentError);
     }
 
-    res.status(200).json({ 
-      success: true, 
-      message: paymentReleaseInfo?.message || `Milestone ${milestonePercentage}% approved successfully`,
+    res.status(200).json({
+      success: true,
+      message:
+        paymentReleaseInfo?.message ||
+        `Milestone ${milestonePercentage}% approved successfully`,
       milestone,
       paymentInfo: paymentReleaseInfo?.data || null,
     });
@@ -791,49 +925,63 @@ const requestMilestoneRevision = async (req, res) => {
     const customerId = req.user.user_id;
 
     if (!projectId || !milestonePercentage) {
-      return res.status(400).json({ error: "Project ID and milestone percentage are required" });
+      return res
+        .status(400)
+        .json({ error: "Project ID and milestone percentage are required" });
     }
 
     if (!feedback || feedback.trim() === "") {
-      return res.status(400).json({ error: "Please provide feedback for the revision request" });
+      return res
+        .status(400)
+        .json({ error: "Please provide feedback for the revision request" });
     }
 
     const project = await ConstructionProjectSchema.findOne({
       _id: projectId,
-      customerId: customerId
+      customerId: customerId,
     });
 
     if (!project) {
-      return res.status(404).json({ error: "Project not found or you don't have permission" });
+      return res
+        .status(404)
+        .json({ error: "Project not found or you don't have permission" });
     }
 
-    const milestone = project.milestones.find(m => m.percentage === parseInt(milestonePercentage) && m.isCheckpoint);
-    
+    const milestone = project.milestones.find(
+      (m) => m.percentage === parseInt(milestonePercentage) && m.isCheckpoint,
+    );
+
     if (!milestone) {
-      return res.status(404).json({ error: `Checkpoint ${milestonePercentage}% not found` });
+      return res
+        .status(404)
+        .json({ error: `Checkpoint ${milestonePercentage}% not found` });
     }
 
     if (milestone.isApprovedByCustomer) {
-      return res.status(400).json({ error: "Cannot request revision for already approved milestone" });
+      return res
+        .status(400)
+        .json({
+          error: "Cannot request revision for already approved milestone",
+        });
     }
 
     milestone.needsRevision = true;
     milestone.customerFeedback = feedback;
-    
+
     // Add customer feedback to conversation
     milestone.conversation = milestone.conversation || [];
     milestone.conversation.push({
-      sender: 'customer',
+      sender: "customer",
       message: feedback,
-      timestamp: new Date()
+      timestamp: new Date(),
     });
 
     await project.save();
 
-    res.status(200).json({ 
-      success: true, 
+    res.status(200).json({
+      success: true,
       message: `Revision requested for ${milestonePercentage}% milestone. Company can now update their message.`,
-      milestone 
+      milestone,
     });
   } catch (error) {
     console.error("Error requesting milestone revision:", error);
@@ -846,7 +994,7 @@ const resolvePhaseForPercentage = (project, milestonePercentage) => {
   if (!Array.isArray(phases) || phases.length === 0) return null;
   const index = Math.min(
     Math.max(Math.floor(milestonePercentage / 25) - 1, 0),
-    phases.length - 1
+    phases.length - 1,
   );
   return phases[index] || null;
 };
@@ -857,36 +1005,52 @@ const payMilestone = async (req, res) => {
     const customerId = req.user.user_id;
 
     if (!projectId || milestonePercentage === undefined || !paymentStage) {
-      return res.status(400).json({ error: "Project ID, milestone percentage, and payment stage are required" });
+      return res
+        .status(400)
+        .json({
+          error:
+            "Project ID, milestone percentage, and payment stage are required",
+        });
     }
 
     // Validate payment stage
-    const validStages = ['upfront', 'completion', 'final'];
+    const validStages = ["upfront", "completion", "final"];
     if (!validStages.includes(paymentStage)) {
-      return res.status(400).json({ error: "Invalid payment stage. Must be: upfront, completion, or final" });
+      return res
+        .status(400)
+        .json({
+          error:
+            "Invalid payment stage. Must be: upfront, completion, or final",
+        });
     }
 
     const milestonePercent = parseInt(milestonePercentage, 10);
     if (Number.isNaN(milestonePercent)) {
-      return res.status(400).json({ error: "Milestone percentage must be a number" });
+      return res
+        .status(400)
+        .json({ error: "Milestone percentage must be a number" });
     }
 
     const project = await ConstructionProjectSchema.findOne({
       _id: projectId,
-      customerId: customerId
+      customerId: customerId,
     });
 
     if (!project) {
-      return res.status(404).json({ error: "Project not found or you don't have permission" });
+      return res
+        .status(404)
+        .json({ error: "Project not found or you don't have permission" });
     }
 
-    let milestone = project.milestones.find(m => m.percentage === milestonePercent && m.isCheckpoint);
+    let milestone = project.milestones.find(
+      (m) => m.percentage === milestonePercent && m.isCheckpoint,
+    );
     if (!milestone) {
       // Allow upfront payment for initial phase (25%) even before milestone submission
-      if (milestonePercent === 25 && paymentStage === 'upfront') {
+      if (milestonePercent === 25 && paymentStage === "upfront") {
         milestone = {
           percentage: milestonePercent,
-          companyMessage: 'Upfront payment initiated by customer',
+          companyMessage: "Upfront payment initiated by customer",
           isApprovedByCustomer: false,
           needsRevision: false,
           submittedAt: new Date(),
@@ -894,29 +1058,42 @@ const payMilestone = async (req, res) => {
           isAutoGenerated: true,
           conversation: [
             {
-              sender: 'customer',
-              message: 'Upfront payment initiated by customer',
-              timestamp: new Date()
-            }
-          ]
+              sender: "customer",
+              message: "Upfront payment initiated by customer",
+              timestamp: new Date(),
+            },
+          ],
         };
         project.milestones.push(milestone);
         milestone = project.milestones[project.milestones.length - 1];
       } else {
-        return res.status(404).json({ error: `Milestone ${milestonePercent}% not found` });
+        return res
+          .status(404)
+          .json({ error: `Milestone ${milestonePercent}% not found` });
       }
     }
 
-    if (!milestone.isApprovedByCustomer && !(paymentStage === 'upfront' && milestonePercent === 25)) {
-      return res.status(400).json({ error: "Milestone must be approved before payment" });
+    if (
+      !milestone.isApprovedByCustomer &&
+      !(paymentStage === "upfront" && milestonePercent === 25)
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Milestone must be approved before payment" });
     }
 
     // Get the phase information
     const phase = resolvePhaseForPercentage(project, milestonePercent);
-    const phaseAmount = phase?.amount || ((project.proposal?.price * (phase?.percentage || 25)) / 100);
+    const phaseAmount =
+      phase?.amount ||
+      (project.proposal?.price * (phase?.percentage || 25)) / 100;
 
     if (!phaseAmount || phaseAmount <= 0) {
-      return res.status(400).json({ error: "Unable to calculate payout amount for this milestone" });
+      return res
+        .status(400)
+        .json({
+          error: "Unable to calculate payout amount for this milestone",
+        });
     }
 
     const isFinalPhase = phase?.isFinal === true;
@@ -924,9 +1101,24 @@ const payMilestone = async (req, res) => {
     // Initialize milestone.payments if it doesn't exist
     if (!milestone.payments) {
       milestone.payments = {
-        upfront: { amount: 0, status: 'pending', releasedAt: null, billUrl: null },
-        completion: { amount: 0, status: 'pending', releasedAt: null, billUrl: null },
-        final: { amount: 0, status: 'pending', releasedAt: null, billUrl: null }
+        upfront: {
+          amount: 0,
+          status: "pending",
+          releasedAt: null,
+          billUrl: null,
+        },
+        completion: {
+          amount: 0,
+          status: "pending",
+          releasedAt: null,
+          billUrl: null,
+        },
+        final: {
+          amount: 0,
+          status: "pending",
+          releasedAt: null,
+          billUrl: null,
+        },
       };
     }
 
@@ -934,48 +1126,63 @@ const payMilestone = async (req, res) => {
 
     if (isFinalPhase) {
       // Final phase: only completion payment exists (100% of phase amount)
-      if (paymentStage !== 'completion') {
-        return res.status(400).json({ error: "Only completion payment is applicable for the Final Touching phase" });
+      if (paymentStage !== "completion") {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Only completion payment is applicable for the Final Touching phase",
+          });
       }
 
-      if (milestone.payments.completion.status === 'released') {
-        return res.status(400).json({ error: "Final payment already released" });
+      if (milestone.payments.completion.status === "released") {
+        return res
+          .status(400)
+          .json({ error: "Final payment already released" });
       }
 
       paymentAmount = phaseAmount;
       milestone.payments.completion.amount = paymentAmount;
-      milestone.payments.completion.status = 'released';
+      milestone.payments.completion.status = "released";
       milestone.payments.completion.releasedAt = new Date();
-
     } else {
       // Work phases: 40% upfront, 60% completion
-      if (paymentStage === 'upfront') {
-        if (milestone.payments.upfront.status === 'released') {
-          return res.status(400).json({ error: "Upfront payment already released" });
+      if (paymentStage === "upfront") {
+        if (milestone.payments.upfront.status === "released") {
+          return res
+            .status(400)
+            .json({ error: "Upfront payment already released" });
         }
-        paymentAmount = phaseAmount * 0.40;
+        paymentAmount = phaseAmount * 0.4;
         milestone.payments.upfront.amount = paymentAmount;
-        milestone.payments.upfront.status = 'released';
+        milestone.payments.upfront.status = "released";
         milestone.payments.upfront.releasedAt = new Date();
-
-      } else if (paymentStage === 'completion') {
-        if (milestone.payments.completion.status === 'released') {
-          return res.status(400).json({ error: "Completion payment already released" });
+      } else if (paymentStage === "completion") {
+        if (milestone.payments.completion.status === "released") {
+          return res
+            .status(400)
+            .json({ error: "Completion payment already released" });
         }
-        paymentAmount = phaseAmount * 0.60;
+        paymentAmount = phaseAmount * 0.6;
         milestone.payments.completion.amount = paymentAmount;
-        milestone.payments.completion.status = 'released';
+        milestone.payments.completion.status = "released";
         milestone.payments.completion.releasedAt = new Date();
-
       } else {
-        return res.status(400).json({ error: "Invalid payment stage for work phases. Use 'upfront' or 'completion'" });
+        return res
+          .status(400)
+          .json({
+            error:
+              "Invalid payment stage for work phases. Use 'upfront' or 'completion'",
+          });
       }
     }
 
     // Record the payout
     project.paymentDetails = project.paymentDetails || {};
-    project.paymentDetails.totalAmount = project.paymentDetails.totalAmount || project.proposal?.price || 0;
-    project.paymentDetails.amountPaidToCompany = (project.paymentDetails.amountPaidToCompany || 0) + paymentAmount;
+    project.paymentDetails.totalAmount =
+      project.paymentDetails.totalAmount || project.proposal?.price || 0;
+    project.paymentDetails.amountPaidToCompany =
+      (project.paymentDetails.amountPaidToCompany || 0) + paymentAmount;
     project.paymentDetails.payouts = project.paymentDetails.payouts || [];
 
     project.paymentDetails.payouts.push({
@@ -984,21 +1191,23 @@ const payMilestone = async (req, res) => {
       releaseDate: new Date(),
       milestonePercentage: milestonePercent,
       phaseName: phase?.name,
-      paymentStage: paymentStage // Track which stage was paid
+      paymentStage: paymentStage, // Track which stage was paid
     });
 
     // Update overall payment status
     if (project.paymentDetails.totalAmount > 0) {
       project.paymentDetails.paymentStatus =
-        project.paymentDetails.amountPaidToCompany >= project.paymentDetails.totalAmount
+        project.paymentDetails.amountPaidToCompany >=
+        project.paymentDetails.totalAmount
           ? "completed"
           : "partially_paid";
     }
 
     // Mark milestone as fully paid only if all stages are released
-    const allPaymentsReleased = isFinalPhase 
-      ? milestone.payments.completion.status === 'released'
-      : milestone.payments.upfront.status === 'released' && milestone.payments.completion.status === 'released';
+    const allPaymentsReleased = isFinalPhase
+      ? milestone.payments.completion.status === "released"
+      : milestone.payments.upfront.status === "released" &&
+        milestone.payments.completion.status === "released";
 
     if (allPaymentsReleased) {
       milestone.isPaid = true;
@@ -1013,7 +1222,7 @@ const payMilestone = async (req, res) => {
       milestone,
       paymentStage,
       paymentAmount,
-      paymentDetails: project.paymentDetails
+      paymentDetails: project.paymentDetails,
     });
   } catch (error) {
     console.error("Error releasing milestone payment:", error);
@@ -1027,7 +1236,9 @@ const submitProjectReview = async (req, res) => {
     const customerId = req.user.user_id;
 
     if (!projectId || !rating) {
-      return res.status(400).json({ error: "Project ID and rating are required" });
+      return res
+        .status(400)
+        .json({ error: "Project ID and rating are required" });
     }
 
     if (rating < 1 || rating > 5) {
@@ -1036,33 +1247,39 @@ const submitProjectReview = async (req, res) => {
 
     const project = await ConstructionProjectSchema.findOne({
       _id: projectId,
-      customerId: customerId
+      customerId: customerId,
     });
 
     if (!project) {
-      return res.status(404).json({ error: "Project not found or you don't have permission" });
+      return res
+        .status(404)
+        .json({ error: "Project not found or you don't have permission" });
     }
 
     if (project.completionPercentage !== 100) {
-      return res.status(400).json({ error: "Project must be 100% complete to submit a review" });
+      return res
+        .status(400)
+        .json({ error: "Project must be 100% complete to submit a review" });
     }
 
     if (project.customerReview && project.customerReview.rating) {
-      return res.status(400).json({ error: "Review already submitted for this project" });
+      return res
+        .status(400)
+        .json({ error: "Review already submitted for this project" });
     }
 
     project.customerReview = {
       rating: parseInt(rating),
-      reviewText: reviewText || '',
-      reviewDate: new Date()
+      reviewText: reviewText || "",
+      reviewDate: new Date(),
     };
 
     await project.save();
 
-    res.status(200).json({ 
-      success: true, 
+    res.status(200).json({
+      success: true,
       message: "Review submitted successfully",
-      review: project.customerReview
+      review: project.customerReview,
     });
   } catch (error) {
     console.error("Error submitting review:", error);
@@ -1074,39 +1291,39 @@ const submitProjectReview = async (req, res) => {
 const getProjectsWithUnviewedCustomerMessages = async (req, res) => {
   try {
     const projects = await ConstructionProjectSchema.find({
-      'milestones.conversation': { $exists: true, $ne: [] }
+      "milestones.conversation": { $exists: true, $ne: [] },
     });
-    
+
     const projectsWithUnviewed = [];
-    
-    projects.forEach(project => {
+
+    projects.forEach((project) => {
       let hasUnviewedMessages = false;
-      
-      project.milestones.forEach(milestone => {
+
+      project.milestones.forEach((milestone) => {
         if (milestone.conversation && milestone.conversation.length > 0) {
           // Check for customer messages that haven't been viewed
           const unviewedCustomerMessages = milestone.conversation.filter(
-            msg => msg.sender === 'customer' && !msg.viewedByCompany
+            (msg) => msg.sender === "customer" && !msg.viewedByCompany,
           );
-          
+
           if (unviewedCustomerMessages.length > 0) {
             hasUnviewedMessages = true;
           }
         }
       });
-      
+
       if (hasUnviewedMessages) {
         projectsWithUnviewed.push({
           _id: project._id,
-          count: 1 // Just indicate there are unviewed messages
+          count: 1, // Just indicate there are unviewed messages
         });
       }
     });
-    
+
     res.json({ success: true, unviewedByProject: projectsWithUnviewed });
   } catch (err) {
-    console.error('Error getting unviewed messages:', err);
-    res.status(500).json({ error: 'Failed to get unviewed messages' });
+    console.error("Error getting unviewed messages:", err);
+    res.status(500).json({ error: "Failed to get unviewed messages" });
   }
 };
 
@@ -1114,28 +1331,28 @@ const getProjectsWithUnviewedCustomerMessages = async (req, res) => {
 const markCustomerMessagesViewed = async (req, res) => {
   try {
     const { projectId } = req.params;
-    
+
     const project = await ConstructionProjectSchema.findById(projectId);
     if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
+      return res.status(404).json({ error: "Project not found" });
     }
-    
+
     // Mark all customer messages in all milestones as viewed
-    project.milestones.forEach(milestone => {
+    project.milestones.forEach((milestone) => {
       if (milestone.conversation && milestone.conversation.length > 0) {
-        milestone.conversation.forEach(msg => {
-          if (msg.sender === 'customer') {
+        milestone.conversation.forEach((msg) => {
+          if (msg.sender === "customer") {
             msg.viewedByCompany = true;
           }
         });
       }
     });
-    
+
     await project.save();
     res.json({ success: true });
   } catch (err) {
-    console.error('Error marking messages as viewed:', err);
-    res.status(500).json({ error: 'Failed to mark messages as viewed' });
+    console.error("Error marking messages as viewed:", err);
+    res.status(500).json({ error: "Failed to mark messages as viewed" });
   }
 };
 
@@ -1143,39 +1360,39 @@ const markCustomerMessagesViewed = async (req, res) => {
 const getProjectsWithUnviewedCompanyMessages = async (req, res) => {
   try {
     const projects = await ConstructionProjectSchema.find({
-      'milestones.conversation': { $exists: true, $ne: [] }
+      "milestones.conversation": { $exists: true, $ne: [] },
     });
-    
+
     const projectsWithUnviewed = [];
-    
-    projects.forEach(project => {
+
+    projects.forEach((project) => {
       let hasUnviewedMessages = false;
-      
-      project.milestones.forEach(milestone => {
+
+      project.milestones.forEach((milestone) => {
         if (milestone.conversation && milestone.conversation.length > 0) {
           // Check for company messages that haven't been viewed
           const unviewedCompanyMessages = milestone.conversation.filter(
-            msg => msg.sender === 'company' && !msg.viewedByCustomer
+            (msg) => msg.sender === "company" && !msg.viewedByCustomer,
           );
-          
+
           if (unviewedCompanyMessages.length > 0) {
             hasUnviewedMessages = true;
           }
         }
       });
-      
+
       if (hasUnviewedMessages) {
         projectsWithUnviewed.push({
           _id: project._id,
-          count: 1
+          count: 1,
         });
       }
     });
-    
+
     res.json({ success: true, unviewedByProject: projectsWithUnviewed });
   } catch (err) {
-    console.error('Error getting unviewed company messages:', err);
-    res.status(500).json({ error: 'Failed to get unviewed messages' });
+    console.error("Error getting unviewed company messages:", err);
+    res.status(500).json({ error: "Failed to get unviewed messages" });
   }
 };
 
@@ -1183,28 +1400,28 @@ const getProjectsWithUnviewedCompanyMessages = async (req, res) => {
 const markCompanyMessagesViewed = async (req, res) => {
   try {
     const { projectId } = req.params;
-    
+
     const project = await ConstructionProjectSchema.findById(projectId);
     if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
+      return res.status(404).json({ error: "Project not found" });
     }
-    
+
     // Mark all company messages in all milestones as viewed
-    project.milestones.forEach(milestone => {
+    project.milestones.forEach((milestone) => {
       if (milestone.conversation && milestone.conversation.length > 0) {
-        milestone.conversation.forEach(msg => {
-          if (msg.sender === 'company') {
+        milestone.conversation.forEach((msg) => {
+          if (msg.sender === "company") {
             msg.viewedByCustomer = true;
           }
         });
       }
     });
-    
+
     await project.save();
     res.json({ success: true });
   } catch (err) {
-    console.error('Error marking company messages as viewed:', err);
-    res.status(500).json({ error: 'Failed to mark messages as viewed' });
+    console.error("Error marking company messages as viewed:", err);
+    res.status(500).json({ error: "Failed to mark messages as viewed" });
   }
 };
 

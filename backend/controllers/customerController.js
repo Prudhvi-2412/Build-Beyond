@@ -17,6 +17,113 @@ const getDashboard = (req, res) => {
   res.status(200).json({ view: "customer/customer_dashboard" });
 };
 
+const normalizeStatus = (status) => (status || "").toString().toLowerCase();
+
+const getEditLockReason = (type, project) => {
+  const status = normalizeStatus(project?.status);
+
+  if (status !== "pending") {
+    return "Editing is allowed only while the request is pending.";
+  }
+
+  if (type === "architect") {
+    if (project?.proposal?.price || project?.proposal?.description) {
+      return "Editing is locked after a proposal is created.";
+    }
+    if ((project?.milestones || []).length > 0) {
+      return "Editing is locked once milestone activity starts.";
+    }
+    if ((project?.projectUpdates || []).length > 0) {
+      return "Editing is locked once project updates are added.";
+    }
+    return null;
+  }
+
+  if (type === "interior") {
+    if (project?.proposal?.price || project?.proposal?.description) {
+      return "Editing is locked after a proposal is created.";
+    }
+    if ((project?.milestones || []).length > 0) {
+      return "Editing is locked once milestone activity starts.";
+    }
+    if ((project?.projectUpdates || []).length > 0) {
+      return "Editing is locked once project updates are added.";
+    }
+    return null;
+  }
+
+  if (type === "company") {
+    if (project?.proposal?.price || project?.proposal?.description) {
+      return "Editing is locked after a proposal is created.";
+    }
+    if ((project?.milestones || []).length > 0) {
+      return "Editing is locked once milestone activity starts.";
+    }
+    if ((project?.recentUpdates || []).length > 0) {
+      return "Editing is locked once project updates are added.";
+    }
+    if ((project?.completionPercentage || 0) > 0) {
+      return "Editing is locked once progress has started.";
+    }
+    return null;
+  }
+
+  return "Unsupported request type.";
+};
+
+const parseJsonIfString = (value, fallback) => {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch (error) {
+      return fallback;
+    }
+  }
+  return value;
+};
+
+const extractArchitectFloorRequirements = (body) => {
+  if (body.floorRequirements) {
+    const parsed = parseJsonIfString(
+      body.floorRequirements,
+      body.floorRequirements,
+    );
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((floor, index) => ({
+          floorNumber: Number(floor.floorNumber || index + 1),
+          details: (floor.details || "").toString(),
+        }))
+        .filter((floor) => floor.floorNumber > 0);
+    }
+  }
+
+  const floorMap = {};
+  Object.keys(body || {}).forEach((key) => {
+    const match = key.match(
+      /^floorRequirements\[(\d+)\]\[(floorNumber|details)\]$/,
+    );
+    if (!match) return;
+
+    const index = Number(match[1]);
+    const field = match[2];
+    if (!floorMap[index]) floorMap[index] = {};
+    floorMap[index][field] = body[key];
+  });
+
+  return Object.keys(floorMap)
+    .sort((a, b) => Number(a) - Number(b))
+    .map((k, idx) => {
+      const floor = floorMap[k];
+      return {
+        floorNumber: Number(floor.floorNumber || idx + 1),
+        details: (floor.details || "").toString(),
+      };
+    })
+    .filter((floor) => floor.floorNumber > 0);
+};
+
 const getJobRequestStatus = async (req, res) => {
   try {
     if (!req.user || !req.user.user_id)
@@ -26,41 +133,113 @@ const getJobRequestStatus = async (req, res) => {
       customer: req.user.user_id,
     })
       .select("+milestones +projectUpdates")
+      .populate("worker", "name email phone specialization experience")
       .lean();
     const rawInteriorApplications = await DesignRequest.find({
       customerId: req.user.user_id,
     })
       .select("+milestones +projectUpdates")
+      .populate("workerId", "name email phone specialization experience")
       .lean();
     const companyApplications = await ConstructionProjectSchema.find({
       customerId: req.user.user_id,
-    }).lean();
+    })
+      .populate("companyId", "companyName contactPerson email phone location")
+      .lean();
+
+    const workerIds = [
+      ...rawArchitectApplications
+        .map((app) => app.worker?._id || app.worker)
+        .filter(Boolean),
+      ...rawInteriorApplications
+        .map((app) => app.workerId?._id || app.workerId)
+        .filter(Boolean),
+    ].map((id) => id.toString());
+
+    const companyIds = companyApplications
+      .map((app) => app.companyId?._id || app.companyId)
+      .filter(Boolean)
+      .map((id) => id.toString());
+
+    const [workers, companies] = await Promise.all([
+      workerIds.length
+        ? Worker.find({ _id: { $in: workerIds } })
+            .select("name email phone specialization experience")
+            .lean()
+        : [],
+      companyIds.length
+        ? Company.find({ _id: { $in: companyIds } })
+            .select("companyName contactPerson email phone location")
+            .lean()
+        : [],
+    ]);
+
+    const workerMap = new Map(workers.map((w) => [String(w._id), w]));
+    const companyMap = new Map(companies.map((c) => [String(c._id), c]));
 
     const architectApplications = await Promise.all(
       rawArchitectApplications.map(async (app) => {
+        const workerId = app.worker?._id || app.worker;
+        const assignedWorkerDetails = workerId
+          ? workerMap.get(String(workerId)) || null
+          : null;
+
         if (app.status === "Accepted" && app.worker) {
           const chatRoom = await findOrCreateChatRoom(app._id, "architect");
-          return { ...app, chatId: chatRoom ? chatRoom.roomId : null };
+          return {
+            ...app,
+            chatId: chatRoom ? chatRoom.roomId : null,
+            assignedWorkerDetails,
+          };
         }
-        return app;
+
+        return {
+          ...app,
+          assignedWorkerDetails,
+        };
       }),
     );
 
     const interiorApplications = await Promise.all(
       rawInteriorApplications.map(async (app) => {
+        const workerId = app.workerId?._id || app.workerId;
+        const assignedWorkerDetails = workerId
+          ? workerMap.get(String(workerId)) || null
+          : null;
+
         if (app.status === "accepted" && app.workerId) {
           const chatRoom = await findOrCreateChatRoom(app._id, "interior");
-          return { ...app, chatId: chatRoom ? chatRoom.roomId : null };
+          return {
+            ...app,
+            chatId: chatRoom ? chatRoom.roomId : null,
+            assignedWorkerDetails,
+          };
         }
-        return app;
+
+        return {
+          ...app,
+          assignedWorkerDetails,
+        };
       }),
     );
+
+    const enrichedCompanyApplications = companyApplications.map((app) => {
+      const companyId = app.companyId?._id || app.companyId;
+      const assignedCompanyDetails = companyId
+        ? companyMap.get(String(companyId)) || null
+        : null;
+
+      return {
+        ...app,
+        assignedCompanyDetails,
+      };
+    });
 
     // routed file : customer/Job_Status
     res.status(200).json({
       architectApplications,
       interiorApplications,
-      companyApplications,
+      companyApplications: enrichedCompanyApplications,
     });
   } catch (error) {
     console.error("Error fetching job request status:", error);
@@ -1034,6 +1213,423 @@ const getDesignRequestDetails = async (req, res) => {
   }
 };
 
+const getEditableRequestDetails = async (req, res) => {
+  try {
+    const { type, projectId } = req.params;
+    const customerId = req.user?.user_id;
+
+    if (!customerId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    let project = null;
+    let mappedRequest = null;
+
+    if (type === "architect") {
+      project = await ArchitectHiring.findOne({
+        _id: projectId,
+        customer: customerId,
+      }).lean();
+
+      if (!project) return res.status(404).json({ error: "Project not found" });
+
+      const lockReason = getEditLockReason(type, project);
+      if (lockReason) {
+        return res.status(403).json({ error: lockReason, editable: false });
+      }
+
+      mappedRequest = {
+        _id: project._id,
+        workerId: project.worker ? String(project.worker) : "",
+        projectName: project.projectName || "",
+        designType: project.designRequirements?.designType || "",
+        architecturalStyle:
+          project.designRequirements?.architecturalStyle || "",
+        fullName: project.customerDetails?.fullName || "",
+        contactNumber: project.customerDetails?.contactNumber || "",
+        email: project.customerDetails?.email || "",
+        streetAddress: project.customerAddress?.streetAddress || "",
+        city: project.customerAddress?.city || "",
+        state: project.customerAddress?.state || "",
+        zipCode: project.customerAddress?.zipCode || "",
+        plotLocation: project.plotInformation?.plotLocation || "",
+        plotSize: project.plotInformation?.plotSize || "",
+        plotOrientation: project.plotInformation?.plotOrientation || "",
+        numFloors: project.designRequirements?.numFloors || "",
+        budget: project.additionalDetails?.budget || "",
+        completionDate: project.additionalDetails?.completionDate
+          ? new Date(project.additionalDetails.completionDate)
+              .toISOString()
+              .split("T")[0]
+          : "",
+        specialFeatures: project.designRequirements?.specialFeatures || "",
+        floorRequirements: project.designRequirements?.floorRequirements || [],
+      };
+    } else if (type === "interior") {
+      project = await DesignRequest.findOne({
+        _id: projectId,
+        customerId,
+      }).lean();
+
+      if (!project) return res.status(404).json({ error: "Project not found" });
+
+      const lockReason = getEditLockReason(type, project);
+      if (lockReason) {
+        return res.status(403).json({ error: lockReason, editable: false });
+      }
+
+      mappedRequest = {
+        _id: project._id,
+        workerId: project.workerId ? String(project.workerId) : "",
+        projectName: project.projectName || "",
+        fullName: project.fullName || "",
+        email: project.email || "",
+        phone: project.phone || "",
+        address: project.address || "",
+        roomType: project.roomType || "",
+        roomLength: project.roomSize?.length ?? "",
+        roomWidth: project.roomSize?.width ?? "",
+        dimensionUnit: project.roomSize?.unit || "feet",
+        ceilingHeight: project.ceilingHeight?.height ?? "",
+        heightUnit:
+          project.ceilingHeight?.unit || project.roomSize?.unit || "feet",
+        designPreference: project.designPreference || "",
+        projectDescription: project.projectDescription || "",
+        currentRoomImages: project.currentRoomImages || [],
+        inspirationImages: project.inspirationImages || [],
+        floorRequirements: project.floorRequirements || [
+          { floorNumber: 1, details: "" },
+        ],
+      };
+    } else if (type === "company") {
+      project = await ConstructionProjectSchema.findOne({
+        _id: projectId,
+        customerId,
+      }).lean();
+
+      if (!project) return res.status(404).json({ error: "Project not found" });
+
+      const lockReason = getEditLockReason(type, project);
+      if (lockReason) {
+        return res.status(403).json({ error: lockReason, editable: false });
+      }
+
+      mappedRequest = {
+        _id: project._id,
+        companyId: project.companyId ? String(project.companyId) : "",
+        projectName: project.projectName || "",
+        buildingType: project.buildingType || "",
+        customerName: project.customerName || "",
+        customerEmail: project.customerEmail || "",
+        customerPhone: project.customerPhone || "",
+        totalArea: project.totalArea ?? "",
+        estimatedBudget: project.estimatedBudget ?? "",
+        projectTimeline: project.projectTimeline ?? "",
+        projectLocation: project.projectLocationPincode || "",
+        projectAddress: project.projectAddress || "",
+        totalFloors: project.totalFloors ?? "",
+        accessibilityNeeds: project.accessibilityNeeds || "",
+        energyEfficiency: project.energyEfficiency || "",
+        specialRequirements: project.specialRequirements || "",
+        floors: project.floors || [],
+        siteFilepaths: project.siteFilepaths || [],
+      };
+    } else {
+      return res.status(400).json({ error: "Invalid request type" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      editable: true,
+      request: mappedRequest,
+    });
+  } catch (error) {
+    console.error("Error fetching editable request details:", error);
+    return res
+      .status(500)
+      .json({ error: "Failed to fetch editable request details" });
+  }
+};
+
+const updateEditableRequest = async (req, res) => {
+  try {
+    const { type, projectId } = req.params;
+    const customerId = req.user?.user_id;
+
+    if (!customerId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    if (type === "architect") {
+      const project = await ArchitectHiring.findOne({
+        _id: projectId,
+        customer: customerId,
+      });
+      if (!project) return res.status(404).json({ error: "Project not found" });
+
+      const lockReason = getEditLockReason(type, project);
+      if (lockReason) return res.status(403).json({ error: lockReason });
+
+      const floorRequirements = extractArchitectFloorRequirements(req.body);
+
+      const newReferenceImages = (req.files || [])
+        .filter((file) => file.fieldname === "referenceImages")
+        .map((file) => ({
+          url: file.path,
+          originalName: file.originalname,
+          mimeType: file.mimetype,
+          size: file.size,
+        }));
+
+      project.projectName = req.body.projectName || project.projectName;
+      if (req.body.workerId !== undefined) {
+        project.worker = req.body.workerId
+          ? new mongoose.Types.ObjectId(req.body.workerId)
+          : null;
+      }
+
+      project.customerDetails = {
+        fullName: req.body.fullName || project.customerDetails?.fullName || "",
+        contactNumber:
+          req.body.contactNumber ||
+          project.customerDetails?.contactNumber ||
+          "",
+        email: req.body.email || project.customerDetails?.email || "",
+      };
+
+      project.customerAddress = {
+        streetAddress:
+          req.body.streetAddress ||
+          project.customerAddress?.streetAddress ||
+          "",
+        city: req.body.city || project.customerAddress?.city || "",
+        state: req.body.state || project.customerAddress?.state || "",
+        zipCode: req.body.zipCode || project.customerAddress?.zipCode || "",
+      };
+
+      project.plotInformation = {
+        plotLocation:
+          req.body.plotLocation || project.plotInformation?.plotLocation || "",
+        plotSize: req.body.plotSize || project.plotInformation?.plotSize || "",
+        plotOrientation:
+          req.body.plotOrientation ||
+          project.plotInformation?.plotOrientation ||
+          "",
+      };
+
+      project.designRequirements = {
+        designType:
+          req.body.designType || project.designRequirements?.designType || "",
+        numFloors:
+          req.body.numFloors || project.designRequirements?.numFloors || "",
+        floorRequirements:
+          floorRequirements.length > 0
+            ? floorRequirements
+            : project.designRequirements?.floorRequirements || [],
+        specialFeatures:
+          req.body.specialFeatures ||
+          project.designRequirements?.specialFeatures ||
+          "",
+        architecturalStyle:
+          req.body.architecturalStyle ||
+          project.designRequirements?.architecturalStyle ||
+          "",
+      };
+
+      const existingReferenceImages =
+        project.additionalDetails?.referenceImages || [];
+      project.additionalDetails = {
+        budget: req.body.budget || project.additionalDetails?.budget || "",
+        completionDate: req.body.completionDate
+          ? new Date(req.body.completionDate)
+          : project.additionalDetails?.completionDate,
+        referenceImages:
+          newReferenceImages.length > 0
+            ? [...existingReferenceImages, ...newReferenceImages]
+            : existingReferenceImages,
+      };
+
+      await project.save();
+      return res
+        .status(200)
+        .json({
+          success: true,
+          message: "Architect request updated successfully",
+        });
+    }
+
+    if (type === "interior") {
+      const project = await DesignRequest.findOne({
+        _id: projectId,
+        customerId,
+      });
+      if (!project) return res.status(404).json({ error: "Project not found" });
+
+      const lockReason = getEditLockReason(type, project);
+      if (lockReason) return res.status(403).json({ error: lockReason });
+
+      if (req.body.workerId !== undefined) {
+        project.workerId = req.body.workerId
+          ? new mongoose.Types.ObjectId(req.body.workerId)
+          : null;
+      }
+
+      project.projectName = req.body.projectName || project.projectName;
+      project.fullName = req.body.fullName || project.fullName;
+      project.email = req.body.email || project.email;
+      project.phone = req.body.phone || project.phone;
+      project.address = req.body.address || project.address;
+      project.roomType = req.body.roomType || project.roomType;
+      project.roomSize = {
+        length: req.body.roomLength
+          ? parseFloat(req.body.roomLength)
+          : project.roomSize?.length,
+        width: req.body.roomWidth
+          ? parseFloat(req.body.roomWidth)
+          : project.roomSize?.width,
+        unit: req.body.dimensionUnit || project.roomSize?.unit || "feet",
+      };
+      project.ceilingHeight = {
+        height: req.body.ceilingHeight
+          ? parseFloat(req.body.ceilingHeight)
+          : project.ceilingHeight?.height,
+        unit:
+          req.body.heightUnit ||
+          req.body.dimensionUnit ||
+          project.ceilingHeight?.unit ||
+          "feet",
+      };
+      project.designPreference =
+        req.body.designPreference || project.designPreference;
+      project.projectDescription =
+        req.body.projectDescription || project.projectDescription;
+
+      const existingCurrent = parseJsonIfString(
+        req.body.existingCurrentRoomImages,
+        project.currentRoomImages || [],
+      );
+      const existingInspiration = parseJsonIfString(
+        req.body.existingInspirationImages,
+        project.inspirationImages || [],
+      );
+
+      const uploadedCurrent = (req.files || [])
+        .filter((file) => file.fieldname === "currentRoomImages")
+        .map((file) => file.path);
+      const uploadedInspiration = (req.files || [])
+        .filter((file) => file.fieldname === "inspirationImages")
+        .map((file) => file.path);
+
+      project.currentRoomImages = [
+        ...(Array.isArray(existingCurrent) ? existingCurrent : []),
+        ...uploadedCurrent,
+      ];
+      project.inspirationImages = [
+        ...(Array.isArray(existingInspiration) ? existingInspiration : []),
+        ...uploadedInspiration,
+      ];
+
+      await project.save();
+      return res
+        .status(200)
+        .json({
+          success: true,
+          message: "Interior request updated successfully",
+        });
+    }
+
+    if (type === "company") {
+      const project = await ConstructionProjectSchema.findOne({
+        _id: projectId,
+        customerId,
+      });
+      if (!project) return res.status(404).json({ error: "Project not found" });
+
+      const lockReason = getEditLockReason(type, project);
+      if (lockReason) return res.status(403).json({ error: lockReason });
+
+      project.projectName = req.body.projectName || project.projectName;
+      project.buildingType = req.body.buildingType || project.buildingType;
+      project.customerName = req.body.customerName || project.customerName;
+      project.customerEmail = req.body.customerEmail || project.customerEmail;
+      project.customerPhone = req.body.customerPhone || project.customerPhone;
+      project.totalArea = req.body.totalArea
+        ? Number(req.body.totalArea)
+        : project.totalArea;
+      project.estimatedBudget = req.body.estimatedBudget
+        ? Number(req.body.estimatedBudget)
+        : project.estimatedBudget;
+      project.projectTimeline = req.body.projectTimeline
+        ? Number(req.body.projectTimeline)
+        : project.projectTimeline;
+      project.projectLocationPincode =
+        req.body.projectLocation || project.projectLocationPincode;
+      project.projectAddress =
+        req.body.projectAddress || project.projectAddress;
+      project.totalFloors = req.body.totalFloors
+        ? Number(req.body.totalFloors)
+        : project.totalFloors;
+      project.specialRequirements =
+        req.body.specialRequirements || project.specialRequirements;
+      project.accessibilityNeeds =
+        req.body.accessibilityNeeds || project.accessibilityNeeds;
+      project.energyEfficiency =
+        req.body.energyEfficiency || project.energyEfficiency;
+
+      if (req.body.companyId !== undefined) {
+        project.companyId = req.body.companyId
+          ? new mongoose.Types.ObjectId(req.body.companyId)
+          : project.companyId;
+      }
+
+      const totalFloors = Number(
+        req.body.totalFloors || project.totalFloors || 0,
+      );
+      const floors = [];
+      for (let i = 1; i <= totalFloors; i++) {
+        const floorImageFile = (req.files || []).find(
+          (file) => file.fieldname === `floorImage-${i}`,
+        );
+        floors.push({
+          floorNumber: i,
+          floorType: req.body[`floorType-${i}`] || "",
+          floorArea: req.body[`floorArea-${i}`]
+            ? Number(req.body[`floorArea-${i}`])
+            : 0,
+          floorDescription: req.body[`floorDescription-${i}`] || "",
+          floorImagePath:
+            (floorImageFile && floorImageFile.path) ||
+            req.body[`existingFloorImage-${i}`] ||
+            "",
+        });
+      }
+      if (floors.length > 0) {
+        project.floors = floors;
+      }
+
+      const uploadedSiteFiles = (req.files || [])
+        .filter((file) => file.fieldname === "siteFiles")
+        .map((file) => file.path);
+      if (uploadedSiteFiles.length > 0) {
+        project.siteFilepaths = uploadedSiteFiles;
+      }
+
+      await project.save();
+      return res
+        .status(200)
+        .json({
+          success: true,
+          message: "Construction request updated successfully",
+        });
+    }
+
+    return res.status(400).json({ error: "Invalid request type" });
+  } catch (error) {
+    console.error("Error updating editable request:", error);
+    return res.status(500).json({ error: "Failed to update request" });
+  }
+};
+
 // Get Payment History for Customer
 const getPaymentHistory = async (req, res) => {
   try {
@@ -1141,6 +1737,8 @@ module.exports = {
   rejectMilestone,
   requestMilestoneRevision,
   reportMilestoneToAdmin,
+  getEditableRequestDetails,
+  updateEditableRequest,
   getArchitectHiringDetails,
   getDesignRequestDetails,
   getPaymentHistory,

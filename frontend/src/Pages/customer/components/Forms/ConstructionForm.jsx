@@ -34,9 +34,16 @@ const ConstructionForm = () => {
   } = useValidation();
 
   const [companyId, setCompanyId] = useState("");
+  const [editId, setEditId] = useState("");
+  const [loadingExistingRequest, setLoadingExistingRequest] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState(null);
+  const [companyDetailsLoading, setCompanyDetailsLoading] = useState(false);
+  const isEditMode = Boolean(editId);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     setCompanyId(params.get("companyId") || "");
+    setEditId(params.get("editId") || "");
   }, [location.search]);
 
   // Get customer profile from Redux
@@ -85,6 +92,125 @@ const ConstructionForm = () => {
     }
     // eslint-disable-next-line
   }, []);
+
+  useEffect(() => {
+    if (!editId) return;
+
+    const fetchEditableRequest = async () => {
+      try {
+        setLoadingExistingRequest(true);
+        const res = await axios.get(
+          `/api/customer/editable-request/company/${editId}`,
+          {
+            withCredentials: true,
+          },
+        );
+
+        const request = res.data?.request;
+        if (!request) return;
+
+        setFormData((prev) => ({
+          ...prev,
+          projectName: request.projectName || "",
+          buildingType: request.buildingType || "",
+          customerName: request.customerName || "",
+          customerEmail: request.customerEmail || "",
+          customerPhone: request.customerPhone || "",
+          totalArea:
+            request.totalArea !== undefined && request.totalArea !== null
+              ? String(request.totalArea)
+              : "",
+          estimatedBudget:
+            request.estimatedBudget !== undefined &&
+            request.estimatedBudget !== null
+              ? String(request.estimatedBudget)
+              : "",
+          projectTimeline:
+            request.projectTimeline !== undefined &&
+            request.projectTimeline !== null
+              ? String(request.projectTimeline)
+              : "",
+          projectLocation: request.projectLocation || "",
+          projectAddress: request.projectAddress || "",
+          totalFloors:
+            request.totalFloors !== undefined && request.totalFloors !== null
+              ? String(request.totalFloors)
+              : "",
+          accessibilityNeeds: request.accessibilityNeeds || "",
+          energyEfficiency: request.energyEfficiency || "",
+          specialRequirements: request.specialRequirements || "",
+        }));
+
+        setCompanyId(request.companyId || "");
+
+        setFloors(
+          (request.floors || []).map((floor, index) => ({
+            id: floor.floorNumber || index + 1,
+            floorType: floor.floorType || "",
+            floorArea:
+              floor.floorArea !== undefined && floor.floorArea !== null
+                ? String(floor.floorArea)
+                : "",
+            floorDescription: floor.floorDescription || "",
+            floorImage: null,
+            existingImagePath: floor.floorImagePath || "",
+            preview: floor.floorImagePath || null,
+          })),
+        );
+      } catch (error) {
+        alert(
+          error.response?.data?.error ||
+            "This request cannot be edited right now.",
+        );
+        navigate("/customerdashboard/job_status");
+      } finally {
+        setLoadingExistingRequest(false);
+      }
+    };
+
+    fetchEditableRequest();
+  }, [editId, navigate]);
+
+  useEffect(() => {
+    if (!companyId) {
+      setSelectedCompany(null);
+      return;
+    }
+
+    const fetchCompanyDetails = async () => {
+      try {
+        setCompanyDetailsLoading(true);
+        const res = await axios.get("/api/construction_companies_list", {
+          withCredentials: true,
+        });
+        const companies = res.data?.companies || [];
+        const matchedCompany = companies.find(
+          (company) => String(company._id) === String(companyId),
+        );
+        setSelectedCompany(matchedCompany || null);
+      } catch (error) {
+        setSelectedCompany(null);
+      } finally {
+        setCompanyDetailsLoading(false);
+      }
+    };
+
+    fetchCompanyDetails();
+  }, [companyId]);
+
+  const formatCompanyLocation = (location) => {
+    if (!location) return "Not available";
+    if (typeof location === "string") return location;
+
+    const parts = [
+      location.city,
+      location.state,
+      location.country,
+      location.postalCode,
+    ].filter(Boolean);
+
+    return parts.length > 0 ? parts.join(", ") : "Not available";
+  };
 
   const [floors, setFloors] = useState([]);
   const [errors, setErrors] = useState({});
@@ -143,7 +269,15 @@ const ConstructionForm = () => {
     }
     // limit files per floor
     setFloors((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, floorImage: file } : f)),
+      prev.map((f) =>
+        f.id === id
+          ? {
+              ...f,
+              floorImage: file,
+              existingImagePath: f.existingImagePath || "",
+            }
+          : f,
+      ),
     );
     if (file.type.startsWith("image/")) {
       const reader = new FileReader();
@@ -307,12 +441,32 @@ const ConstructionForm = () => {
     }
 
     try {
-      const res = await axios.post("/api/construction_form", submitData, {
+      const endpoint = isEditMode
+        ? `/api/customer/editable-request/company/${editId}`
+        : "/api/construction_form";
+      const method = isEditMode ? "put" : "post";
+
+      floors.forEach((floor) => {
+        if (floor.existingImagePath) {
+          submitData.append(
+            `existingFloorImage-${floor.id}`,
+            floor.existingImagePath,
+          );
+        }
+      });
+
+      const res = await axios({
+        method,
+        url: endpoint,
+        data: submitData,
         headers: { "Content-Type": "multipart/form-data" },
         withCredentials: true,
       });
 
       if (res.data && res.data.success) {
+        if (isEditMode) {
+          alert("Request updated successfully!");
+        }
         navigate("/customerdashboard/job_status");
       } else {
         setErrors((p) => ({
@@ -330,524 +484,593 @@ const ConstructionForm = () => {
     }
   };
 
+  if (loadingExistingRequest) {
+    return <div className="constructionform-container">Loading request...</div>;
+  }
+
   return (
     <div className="constructionform-container">
       <div className="constructionform-page-title">
-        <h1>Construction Project Submission</h1>
+        <h1>
+          {isEditMode
+            ? "Edit Construction Project Request"
+            : "Construction Project Submission"}
+        </h1>
         <div className="constructionform-underline" />
       </div>
 
-      <form onSubmit={handleSubmit} noValidate>
-        <input type="hidden" name="companyId" value={companyId} />
+      <div className="constructionform-content-layout">
+        <aside className="constructionform-verification-panel">
+          <h3>Company Details</h3>
+          {companyDetailsLoading ? (
+            <p>Loading company details...</p>
+          ) : selectedCompany ? (
+            <div className="constructionform-verification-list">
+              <p>
+                <strong>Company:</strong>{" "}
+                {selectedCompany.companyName || "Not available"}
+              </p>
+              <p>
+                <strong>Contact Person:</strong>{" "}
+                {selectedCompany.contactPerson || "Not available"}
+              </p>
+              <p>
+                <strong>Email:</strong>{" "}
+                {selectedCompany.email || "Not available"}
+              </p>
+              <p>
+                <strong>Phone:</strong>{" "}
+                {selectedCompany.phone || "Not available"}
+              </p>
+              <p>
+                <strong>Location:</strong>{" "}
+                {formatCompanyLocation(selectedCompany.location)}
+              </p>
+            </div>
+          ) : (
+            <p>No company selected for this request yet.</p>
+          )}
+        </aside>
 
-        <div className="constructionform-form-section">
-          <h2>Project Information</h2>
-          <div className="constructionform-form-grid">
-            <div className="constructionform-form-group">
-              <label
-                htmlFor="projectName"
-                className="constructionform-required"
-              >
-                Project Name
-              </label>
-              <input
-                id="projectName"
-                name="projectName"
-                value={formData.projectName}
-                onChange={handleInputChange}
-              />
-              {errors.projectName && (
-                <div className="constructionform-error-text">
-                  {errors.projectName}
-                </div>
-              )}
-            </div>
+        <div className="constructionform-main-content">
+          <form onSubmit={handleSubmit} noValidate>
+            <input type="hidden" name="companyId" value={companyId} />
 
-            <div className="constructionform-form-group">
-              <label
-                htmlFor="buildingType"
-                className="constructionform-required"
-              >
-                Building Type
-              </label>
-              <select
-                id="buildingType"
-                name="buildingType"
-                value={formData.buildingType}
-                onChange={handleInputChange}
-              >
-                <option value="">Select Building Type</option>
-                <option value="residential">Residential</option>
-                <option value="commercial">Commercial</option>
-                <option value="industrial">Industrial</option>
-                <option value="mixedUse">Mixed Use</option>
-                <option value="other">Other</option>
-              </select>
-              {errors.buildingType && (
-                <div className="constructionform-error-text">
-                  {errors.buildingType}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="constructionform-form-section">
-          <h2>Customer Information</h2>
-          <div className="constructionform-form-grid">
-            <div className="constructionform-form-group">
-              <label
-                htmlFor="customerName"
-                className="constructionform-required"
-              >
-                Full Name
-              </label>
-              <input
-                id="customerName"
-                name="customerName"
-                value={formData.customerName}
-                onChange={handleInputChange}
-              />
-              {errors.customerName && (
-                <div className="constructionform-error-text">
-                  {errors.customerName}
-                </div>
-              )}
-            </div>
-            <div className="constructionform-form-group">
-              <label
-                htmlFor="customerEmail"
-                className="constructionform-required"
-              >
-                Email Address
-              </label>
-              <input
-                id="customerEmail"
-                name="customerEmail"
-                type="email"
-                value={formData.customerEmail}
-                onChange={handleInputChange}
-              />
-              {errors.customerEmail && (
-                <div className="constructionform-error-text">
-                  {errors.customerEmail}
-                </div>
-              )}
-            </div>
-            <div className="constructionform-form-group">
-              <label
-                htmlFor="customerPhone"
-                className="constructionform-required"
-              >
-                Phone Number
-              </label>
-              <input
-                id="customerPhone"
-                name="customerPhone"
-                type="tel"
-                value={formData.customerPhone}
-                onChange={handleInputChange}
-              />
-              {errors.customerPhone && (
-                <div className="constructionform-error-text">
-                  {errors.customerPhone}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="constructionform-form-section">
-          <h2>Project Details</h2>
-          <div className="constructionform-form-grid">
-            <div className="constructionform-form-group">
-              <label htmlFor="totalArea" className="constructionform-required">
-                Total Building Area (sq meters)
-              </label>
-              <input
-                id="totalArea"
-                name="totalArea"
-                type="number"
-                step="0.1"
-                value={formData.totalArea}
-                onChange={handleInputChange}
-              />
-              {errors.totalArea && (
-                <div className="constructionform-error-text">
-                  {errors.totalArea}
-                </div>
-              )}
-            </div>
-
-            <div className="constructionform-form-group">
-              <label
-                htmlFor="estimatedBudget"
-                className="constructionform-required"
-              >
-                Estimated Budget (₹)
-              </label>
-              <input
-                id="estimatedBudget"
-                name="estimatedBudget"
-                value={formData.estimatedBudget}
-                onChange={handleInputChange}
-              />
-              {errors.estimatedBudget && (
-                <div className="constructionform-error-text">
-                  {errors.estimatedBudget}
-                </div>
-              )}
-            </div>
-
-            <div className="constructionform-form-group">
-              <label
-                htmlFor="projectTimeline"
-                className="constructionform-required"
-              >
-                Expected Timeline (months)
-              </label>
-              <input
-                id="projectTimeline"
-                name="projectTimeline"
-                type="number"
-                step="1"
-                value={formData.projectTimeline}
-                onChange={handleInputChange}
-              />
-              {errors.projectTimeline && (
-                <div className="constructionform-error-text">
-                  {errors.projectTimeline}
-                </div>
-              )}
-            </div>
-
-            <div className="constructionform-form-group">
-              <label
-                htmlFor="projectLocation"
-                className="constructionform-required"
-              >
-                Project Location Pincode
-              </label>
-              <input
-                id="projectLocation"
-                name="projectLocation"
-                value={formData.projectLocation}
-                onChange={handleInputChange}
-                placeholder="e.g., 534260"
-              />
-              {errors.projectLocation && (
-                <div className="constructionform-error-text">
-                  {errors.projectLocation}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="constructionform-form-group">
-            <label
-              htmlFor="projectAddress"
-              className="constructionform-required"
-            >
-              Project Address
-            </label>
-            <textarea
-              id="projectAddress"
-              name="projectAddress"
-              value={formData.projectAddress}
-              onChange={handleInputChange}
-            />
-            {errors.projectAddress && (
-              <div className="constructionform-error-text">
-                {errors.projectAddress}
-              </div>
-            )}
-          </div>
-
-          <div className="constructionform-form-grid">
-            <div className="constructionform-form-group">
-              <label htmlFor="projectCity">City</label>
-              <input
-                id="projectCity"
-                name="projectCity"
-                value={formData.projectCity}
-                onChange={handleInputChange}
-              />
-              {errors.projectCity && (
-                <div className="constructionform-error-text">
-                  {errors.projectCity}
-                </div>
-              )}
-            </div>
-            <div className="constructionform-form-group">
-              <label htmlFor="projectState">State</label>
-              <input
-                id="projectState"
-                name="projectState"
-                value={formData.projectState}
-                onChange={handleInputChange}
-              />
-              {errors.projectState && (
-                <div className="constructionform-error-text">
-                  {errors.projectState}
-                </div>
-              )}
-            </div>
-            <div className="constructionform-form-group">
-              <label htmlFor="companyName">Company (optional)</label>
-              <input
-                id="companyName"
-                name="companyName"
-                value={formData.companyName}
-                onChange={handleInputChange}
-              />
-              {errors.companyName && (
-                <div className="constructionform-error-text">
-                  {errors.companyName}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="constructionform-form-section">
-          <h2>Floor Plans</h2>
-          <div className="constructionform-form-group">
-            <label htmlFor="totalFloors" className="constructionform-required">
-              Number of Floors
-            </label>
-            <input
-              id="totalFloors"
-              name="totalFloors"
-              type="number"
-              min="1"
-              value={formData.totalFloors}
-              onChange={handleInputChange}
-            />
-            <div style={{ marginTop: 8 }}>
-              <button
-                type="button"
-                className="constructionform-btn"
-                onClick={generateFloors}
-                disabled={!formData.totalFloors}
-              >
-                Generate Floor Details
-              </button>
-            </div>
-            {errors.totalFloors && (
-              <div className="constructionform-error-text">
-                {errors.totalFloors}
-              </div>
-            )}
-          </div>
-
-          <div id="constructionform-floorDetails">
-            {floors.map((floor) => (
-              <div key={floor.id} className="constructionform-floor-container">
-                <div className="constructionform-floor-header">
-                  <h3>Floor {floor.id}</h3>
-                  <button
-                    type="button"
-                    className="constructionform-btn constructionform-btn-remove"
-                    onClick={() => removeFloor(floor.id)}
+            <div className="constructionform-form-section">
+              <h2>Project Information</h2>
+              <div className="constructionform-form-grid">
+                <div className="constructionform-form-group">
+                  <label
+                    htmlFor="projectName"
+                    className="constructionform-required"
                   >
-                    Remove
-                  </button>
-                </div>
-
-                <div className="constructionform-form-grid">
-                  <div className="constructionform-form-group">
-                    <label htmlFor={`floorType-${floor.id}`}>Floor Type</label>
-                    <select
-                      id={`floorType-${floor.id}`}
-                      value={floor.floorType}
-                      onChange={(e) =>
-                        updateFloor(floor.id, "floorType", e.target.value)
-                      }
-                    >
-                      <option value="">Select Floor Type</option>
-                      <option value="residential">Residential</option>
-                      <option value="commercial">Commercial</option>
-                      <option value="parking">Parking</option>
-                      <option value="mechanical">Mechanical/Utility</option>
-                      <option value="other">Other</option>
-                    </select>
-                    {errors[`floorType-${floor.id}`] && (
-                      <div className="constructionform-error-text">
-                        {errors[`floorType-${floor.id}`]}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="constructionform-form-group">
-                    <label htmlFor={`floorArea-${floor.id}`}>
-                      Floor Area (sq meters)
-                    </label>
-                    <input
-                      id={`floorArea-${floor.id}`}
-                      type="number"
-                      step="0.1"
-                      value={floor.floorArea}
-                      onChange={(e) =>
-                        updateFloor(floor.id, "floorArea", e.target.value)
-                      }
-                    />
-                    {errors[`floorArea-${floor.id}`] && (
-                      <div className="constructionform-error-text">
-                        {errors[`floorArea-${floor.id}`]}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="constructionform-form-group">
-                  <label htmlFor={`floorDescription-${floor.id}`}>
-                    Floor Description
-                  </label>
-                  <textarea
-                    id={`floorDescription-${floor.id}`}
-                    value={floor.floorDescription}
-                    onChange={(e) =>
-                      updateFloor(floor.id, "floorDescription", e.target.value)
-                    }
-                    placeholder="Describe layout/purpose"
-                  />
-                  {errors[`floorDescription-${floor.id}`] && (
-                    <div className="constructionform-error-text">
-                      {errors[`floorDescription-${floor.id}`]}
-                    </div>
-                  )}
-                </div>
-
-                <div className="constructionform-form-group">
-                  <label htmlFor={`floorImage-${floor.id}`}>
-                    Floor Plan Image (optional)
+                    Project Name
                   </label>
                   <input
-                    id={`floorImage-${floor.id}`}
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={(e) =>
-                      handleFloorImage(floor.id, e.target.files[0])
-                    }
+                    id="projectName"
+                    name="projectName"
+                    value={formData.projectName}
+                    onChange={handleInputChange}
                   />
-                  {errors[`floorImage-${floor.id}`] && (
+                  {errors.projectName && (
                     <div className="constructionform-error-text">
-                      {errors[`floorImage-${floor.id}`]}
+                      {errors.projectName}
                     </div>
                   )}
-                  {floor.preview && (
-                    <img
-                      src={floor.preview}
-                      alt={`Floor ${floor.id} preview`}
-                      className="constructionform-image-preview"
-                    />
+                </div>
+
+                <div className="constructionform-form-group">
+                  <label
+                    htmlFor="buildingType"
+                    className="constructionform-required"
+                  >
+                    Building Type
+                  </label>
+                  <select
+                    id="buildingType"
+                    name="buildingType"
+                    value={formData.buildingType}
+                    onChange={handleInputChange}
+                  >
+                    <option value="">Select Building Type</option>
+                    <option value="residential">Residential</option>
+                    <option value="commercial">Commercial</option>
+                    <option value="industrial">Industrial</option>
+                    <option value="mixedUse">Mixed Use</option>
+                    <option value="other">Other</option>
+                  </select>
+                  {errors.buildingType && (
+                    <div className="constructionform-error-text">
+                      {errors.buildingType}
+                    </div>
                   )}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="constructionform-form-section">
-          <h2>Additional Requirements</h2>
-
-          <div className="constructionform-form-grid">
-            <div className="constructionform-form-group">
-              <label htmlFor="accessibilityNeeds">Accessibility Needs</label>
-              <select
-                id="accessibilityNeeds"
-                name="accessibilityNeeds"
-                value={formData.accessibilityNeeds}
-                onChange={handleInputChange}
-              >
-                <option value="">Select Options</option>
-                <option value="wheelchair">Wheelchair Accessibility</option>
-                <option value="elevators">Elevators</option>
-                <option value="ramps">Ramps</option>
-                <option value="other">Other</option>
-                <option value="none">None</option>
-              </select>
-              {errors.accessibilityNeeds && (
-                <div className="constructionform-error-text">
-                  {errors.accessibilityNeeds}
-                </div>
-              )}
             </div>
 
-            <div className="constructionform-form-group">
-              <label htmlFor="energyEfficiency">Energy Efficiency Goals</label>
-              <select
-                id="energyEfficiency"
-                name="energyEfficiency"
-                value={formData.energyEfficiency}
-                onChange={handleInputChange}
-              >
-                <option value="">Select Options</option>
-                <option value="standard">Standard</option>
-                <option value="leed">LEED Certified</option>
-                <option value="passive">Passive House</option>
-                <option value="netZero">Net Zero</option>
-                <option value="other">Other</option>
-              </select>
-              {errors.energyEfficiency && (
-                <div className="constructionform-error-text">
-                  {errors.energyEfficiency}
+            <div className="constructionform-form-section">
+              <h2>Customer Information</h2>
+              <div className="constructionform-form-grid">
+                <div className="constructionform-form-group">
+                  <label
+                    htmlFor="customerName"
+                    className="constructionform-required"
+                  >
+                    Full Name
+                  </label>
+                  <input
+                    id="customerName"
+                    name="customerName"
+                    value={formData.customerName}
+                    onChange={handleInputChange}
+                  />
+                  {errors.customerName && (
+                    <div className="constructionform-error-text">
+                      {errors.customerName}
+                    </div>
+                  )}
                 </div>
-              )}
+                <div className="constructionform-form-group">
+                  <label
+                    htmlFor="customerEmail"
+                    className="constructionform-required"
+                  >
+                    Email Address
+                  </label>
+                  <input
+                    id="customerEmail"
+                    name="customerEmail"
+                    type="email"
+                    value={formData.customerEmail}
+                    onChange={handleInputChange}
+                  />
+                  {errors.customerEmail && (
+                    <div className="constructionform-error-text">
+                      {errors.customerEmail}
+                    </div>
+                  )}
+                </div>
+                <div className="constructionform-form-group">
+                  <label
+                    htmlFor="customerPhone"
+                    className="constructionform-required"
+                  >
+                    Phone Number
+                  </label>
+                  <input
+                    id="customerPhone"
+                    name="customerPhone"
+                    type="tel"
+                    value={formData.customerPhone}
+                    onChange={handleInputChange}
+                  />
+                  {errors.customerPhone && (
+                    <div className="constructionform-error-text">
+                      {errors.customerPhone}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div className="constructionform-form-group">
-            <label htmlFor="specialRequirements">
-              Special Requirements or Considerations
-            </label>
-            <textarea
-              id="specialRequirements"
-              name="specialRequirements"
-              value={formData.specialRequirements}
-              onChange={handleInputChange}
-              placeholder="List any special requirements, materials, or considerations"
-            />
-            {errors.specialRequirements && (
-              <div className="constructionform-error-text">
-                {errors.specialRequirements}
+            <div className="constructionform-form-section">
+              <h2>Project Details</h2>
+              <div className="constructionform-form-grid">
+                <div className="constructionform-form-group">
+                  <label
+                    htmlFor="totalArea"
+                    className="constructionform-required"
+                  >
+                    Total Building Area (sq meters)
+                  </label>
+                  <input
+                    id="totalArea"
+                    name="totalArea"
+                    type="number"
+                    step="0.1"
+                    value={formData.totalArea}
+                    onChange={handleInputChange}
+                  />
+                  {errors.totalArea && (
+                    <div className="constructionform-error-text">
+                      {errors.totalArea}
+                    </div>
+                  )}
+                </div>
+
+                <div className="constructionform-form-group">
+                  <label
+                    htmlFor="estimatedBudget"
+                    className="constructionform-required"
+                  >
+                    Estimated Budget (₹)
+                  </label>
+                  <input
+                    id="estimatedBudget"
+                    name="estimatedBudget"
+                    value={formData.estimatedBudget}
+                    onChange={handleInputChange}
+                  />
+                  {errors.estimatedBudget && (
+                    <div className="constructionform-error-text">
+                      {errors.estimatedBudget}
+                    </div>
+                  )}
+                </div>
+
+                <div className="constructionform-form-group">
+                  <label
+                    htmlFor="projectTimeline"
+                    className="constructionform-required"
+                  >
+                    Expected Timeline (months)
+                  </label>
+                  <input
+                    id="projectTimeline"
+                    name="projectTimeline"
+                    type="number"
+                    step="1"
+                    value={formData.projectTimeline}
+                    onChange={handleInputChange}
+                  />
+                  {errors.projectTimeline && (
+                    <div className="constructionform-error-text">
+                      {errors.projectTimeline}
+                    </div>
+                  )}
+                </div>
+
+                <div className="constructionform-form-group">
+                  <label
+                    htmlFor="projectLocation"
+                    className="constructionform-required"
+                  >
+                    Project Location Pincode
+                  </label>
+                  <input
+                    id="projectLocation"
+                    name="projectLocation"
+                    value={formData.projectLocation}
+                    onChange={handleInputChange}
+                    placeholder="e.g., 534260"
+                  />
+                  {errors.projectLocation && (
+                    <div className="constructionform-error-text">
+                      {errors.projectLocation}
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
 
-          <div className="constructionform-form-group">
-            <label htmlFor="siteFiles">
-              Site Plans or Additional Documents (Optional)
-            </label>
-            <input
-              id="siteFiles"
-              name="siteFiles"
-              type="file"
-              multiple
-              accept="image/*,application/pdf"
-            />
-            {errors.siteFiles && (
-              <div className="constructionform-error-text">
-                {errors.siteFiles}
+              <div className="constructionform-form-group">
+                <label
+                  htmlFor="projectAddress"
+                  className="constructionform-required"
+                >
+                  Project Address
+                </label>
+                <textarea
+                  id="projectAddress"
+                  name="projectAddress"
+                  value={formData.projectAddress}
+                  onChange={handleInputChange}
+                />
+                {errors.projectAddress && (
+                  <div className="constructionform-error-text">
+                    {errors.projectAddress}
+                  </div>
+                )}
               </div>
+
+              <div className="constructionform-form-grid">
+                <div className="constructionform-form-group">
+                  <label htmlFor="projectCity">City</label>
+                  <input
+                    id="projectCity"
+                    name="projectCity"
+                    value={formData.projectCity}
+                    onChange={handleInputChange}
+                  />
+                  {errors.projectCity && (
+                    <div className="constructionform-error-text">
+                      {errors.projectCity}
+                    </div>
+                  )}
+                </div>
+                <div className="constructionform-form-group">
+                  <label htmlFor="projectState">State</label>
+                  <input
+                    id="projectState"
+                    name="projectState"
+                    value={formData.projectState}
+                    onChange={handleInputChange}
+                  />
+                  {errors.projectState && (
+                    <div className="constructionform-error-text">
+                      {errors.projectState}
+                    </div>
+                  )}
+                </div>
+                <div className="constructionform-form-group">
+                  <label htmlFor="companyName">Company (optional)</label>
+                  <input
+                    id="companyName"
+                    name="companyName"
+                    value={formData.companyName}
+                    onChange={handleInputChange}
+                  />
+                  {errors.companyName && (
+                    <div className="constructionform-error-text">
+                      {errors.companyName}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="constructionform-form-section">
+              <h2>Floor Plans</h2>
+              <div className="constructionform-form-group">
+                <label
+                  htmlFor="totalFloors"
+                  className="constructionform-required"
+                >
+                  Number of Floors
+                </label>
+                <input
+                  id="totalFloors"
+                  name="totalFloors"
+                  type="number"
+                  min="1"
+                  value={formData.totalFloors}
+                  onChange={handleInputChange}
+                />
+                <div style={{ marginTop: 8 }}>
+                  <button
+                    type="button"
+                    className="constructionform-btn"
+                    onClick={generateFloors}
+                    disabled={!formData.totalFloors}
+                  >
+                    Generate Floor Details
+                  </button>
+                </div>
+                {errors.totalFloors && (
+                  <div className="constructionform-error-text">
+                    {errors.totalFloors}
+                  </div>
+                )}
+              </div>
+
+              <div id="constructionform-floorDetails">
+                {floors.map((floor) => (
+                  <div
+                    key={floor.id}
+                    className="constructionform-floor-container"
+                  >
+                    <div className="constructionform-floor-header">
+                      <h3>Floor {floor.id}</h3>
+                      <button
+                        type="button"
+                        className="constructionform-btn constructionform-btn-remove"
+                        onClick={() => removeFloor(floor.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+
+                    <div className="constructionform-form-grid">
+                      <div className="constructionform-form-group">
+                        <label htmlFor={`floorType-${floor.id}`}>
+                          Floor Type
+                        </label>
+                        <select
+                          id={`floorType-${floor.id}`}
+                          value={floor.floorType}
+                          onChange={(e) =>
+                            updateFloor(floor.id, "floorType", e.target.value)
+                          }
+                        >
+                          <option value="">Select Floor Type</option>
+                          <option value="residential">Residential</option>
+                          <option value="commercial">Commercial</option>
+                          <option value="parking">Parking</option>
+                          <option value="mechanical">Mechanical/Utility</option>
+                          <option value="other">Other</option>
+                        </select>
+                        {errors[`floorType-${floor.id}`] && (
+                          <div className="constructionform-error-text">
+                            {errors[`floorType-${floor.id}`]}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="constructionform-form-group">
+                        <label htmlFor={`floorArea-${floor.id}`}>
+                          Floor Area (sq meters)
+                        </label>
+                        <input
+                          id={`floorArea-${floor.id}`}
+                          type="number"
+                          step="0.1"
+                          value={floor.floorArea}
+                          onChange={(e) =>
+                            updateFloor(floor.id, "floorArea", e.target.value)
+                          }
+                        />
+                        {errors[`floorArea-${floor.id}`] && (
+                          <div className="constructionform-error-text">
+                            {errors[`floorArea-${floor.id}`]}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="constructionform-form-group">
+                      <label htmlFor={`floorDescription-${floor.id}`}>
+                        Floor Description
+                      </label>
+                      <textarea
+                        id={`floorDescription-${floor.id}`}
+                        value={floor.floorDescription}
+                        onChange={(e) =>
+                          updateFloor(
+                            floor.id,
+                            "floorDescription",
+                            e.target.value,
+                          )
+                        }
+                        placeholder="Describe layout/purpose"
+                      />
+                      {errors[`floorDescription-${floor.id}`] && (
+                        <div className="constructionform-error-text">
+                          {errors[`floorDescription-${floor.id}`]}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="constructionform-form-group">
+                      <label htmlFor={`floorImage-${floor.id}`}>
+                        Floor Plan Image (optional)
+                      </label>
+                      <input
+                        id={`floorImage-${floor.id}`}
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={(e) =>
+                          handleFloorImage(floor.id, e.target.files[0])
+                        }
+                      />
+                      {errors[`floorImage-${floor.id}`] && (
+                        <div className="constructionform-error-text">
+                          {errors[`floorImage-${floor.id}`]}
+                        </div>
+                      )}
+                      {floor.preview && (
+                        <img
+                          src={floor.preview}
+                          alt={`Floor ${floor.id} preview`}
+                          className="constructionform-image-preview"
+                        />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="constructionform-form-section">
+              <h2>Additional Requirements</h2>
+
+              <div className="constructionform-form-grid">
+                <div className="constructionform-form-group">
+                  <label htmlFor="accessibilityNeeds">
+                    Accessibility Needs
+                  </label>
+                  <select
+                    id="accessibilityNeeds"
+                    name="accessibilityNeeds"
+                    value={formData.accessibilityNeeds}
+                    onChange={handleInputChange}
+                  >
+                    <option value="">Select Options</option>
+                    <option value="wheelchair">Wheelchair Accessibility</option>
+                    <option value="elevators">Elevators</option>
+                    <option value="ramps">Ramps</option>
+                    <option value="other">Other</option>
+                    <option value="none">None</option>
+                  </select>
+                  {errors.accessibilityNeeds && (
+                    <div className="constructionform-error-text">
+                      {errors.accessibilityNeeds}
+                    </div>
+                  )}
+                </div>
+
+                <div className="constructionform-form-group">
+                  <label htmlFor="energyEfficiency">
+                    Energy Efficiency Goals
+                  </label>
+                  <select
+                    id="energyEfficiency"
+                    name="energyEfficiency"
+                    value={formData.energyEfficiency}
+                    onChange={handleInputChange}
+                  >
+                    <option value="">Select Options</option>
+                    <option value="standard">Standard</option>
+                    <option value="leed">LEED Certified</option>
+                    <option value="passive">Passive House</option>
+                    <option value="netZero">Net Zero</option>
+                    <option value="other">Other</option>
+                  </select>
+                  {errors.energyEfficiency && (
+                    <div className="constructionform-error-text">
+                      {errors.energyEfficiency}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="constructionform-form-group">
+                <label htmlFor="specialRequirements">
+                  Special Requirements or Considerations
+                </label>
+                <textarea
+                  id="specialRequirements"
+                  name="specialRequirements"
+                  value={formData.specialRequirements}
+                  onChange={handleInputChange}
+                  placeholder="List any special requirements, materials, or considerations"
+                />
+                {errors.specialRequirements && (
+                  <div className="constructionform-error-text">
+                    {errors.specialRequirements}
+                  </div>
+                )}
+              </div>
+
+              <div className="constructionform-form-group">
+                <label htmlFor="siteFiles">
+                  Site Plans or Additional Documents (Optional)
+                </label>
+                <input
+                  id="siteFiles"
+                  name="siteFiles"
+                  type="file"
+                  multiple
+                  accept="image/*,application/pdf"
+                />
+                {errors.siteFiles && (
+                  <div className="constructionform-error-text">
+                    {errors.siteFiles}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {errors.submit && (
+              <div className="constructionform-error-text">{errors.submit}</div>
             )}
-          </div>
-        </div>
 
-        {errors.submit && (
-          <div className="constructionform-error-text">{errors.submit}</div>
-        )}
-
-        <div className="constructionform-submit-section">
-          <button
-            type="submit"
-            className="constructionform-btn constructionform-submit-btn"
-            disabled={submitting}
-          >
-            {submitting ? "Submitting..." : "Submit Project"}
-          </button>
+            <div className="constructionform-submit-section">
+              <button
+                type="submit"
+                className="constructionform-btn constructionform-submit-btn"
+                disabled={submitting}
+              >
+                {submitting
+                  ? isEditMode
+                    ? "Updating..."
+                    : "Submitting..."
+                  : isEditMode
+                    ? "Update Project"
+                    : "Submit Project"}
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
+      </div>
     </div>
   );
 };

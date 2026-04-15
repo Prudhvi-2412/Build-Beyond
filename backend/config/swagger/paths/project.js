@@ -349,7 +349,7 @@ module.exports = {
   },
   "/api/customer/submit-bid": {
     post: {
-      tags: ["project-customer-accessed"],
+      tags: ["project-company-accessed"],
       summary: "Customer submits bid for project",
       security: [{ cookieAuth: [] }],
       requestBody: {
@@ -538,36 +538,6 @@ module.exports = {
     post: {
       tags: ["project-company-accessed"],
       summary: "Mark customer messages as viewed (company)",
-      security: [{ cookieAuth: [] }],
-      parameters: [
-        {
-          name: "projectId",
-          in: "path",
-          required: true,
-          schema: { type: "string" },
-        },
-      ],
-      responses: {
-        200: { description: "Messages marked as viewed" },
-        401: { $ref: "#/components/responses/Unauthorized" },
-      },
-    },
-  },
-  "/api/customer/unviewed-company-messages": {
-    get: {
-      tags: ["project-customer-accessed"],
-      summary: "Get projects with unviewed company messages (customer view)",
-      security: [{ cookieAuth: [] }],
-      responses: {
-        200: { description: "Projects with unviewed messages retrieved" },
-        401: { $ref: "#/components/responses/Unauthorized" },
-      },
-    },
-  },
-  "/api/customer/mark-messages-viewed/{projectId}": {
-    post: {
-      tags: ["project-customer-accessed"],
-      summary: "Mark company messages as viewed (customer)",
       security: [{ cookieAuth: [] }],
       parameters: [
         {
