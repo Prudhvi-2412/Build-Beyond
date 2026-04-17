@@ -8,6 +8,15 @@ import axios from "axios";
 import "./ConstructionForm.css";
 import { useValidation } from "../../../../context/ValidationContext";
 import CustomerPageLoader from "../common/CustomerPageLoader";
+import {
+  clearDraft,
+  clearClipboard,
+  readClipboard,
+  readDraft,
+  saveDraft,
+  writeClipboard,
+} from "./formDraftStorage";
+import "./formDraftControls.css";
 
 const MAX_FLOOR_FILES = 3;
 const ALLOWED_FLOOR_FILE_TYPES = ["image/jpeg", "image/png", "application/pdf"];
@@ -40,6 +49,10 @@ const ConstructionForm = () => {
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [companyDetailsLoading, setCompanyDetailsLoading] = useState(false);
   const isEditMode = Boolean(editId);
+  const clipboardKey = "construction-form";
+  const [copiedForm, setCopiedForm] = useState(() =>
+    readClipboard(clipboardKey),
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -158,6 +171,27 @@ const ConstructionForm = () => {
             preview: floor.floorImagePath || null,
           })),
         );
+
+        const draftKey = request.companyId
+          ? `company-${request.companyId}`
+          : `edit-${editId}`;
+        const draft = readDraft("construction-form", draftKey);
+        if (draft?.data) {
+          setFormData((prev) => ({
+            ...prev,
+            ...(draft.data.formData || {}),
+          }));
+          setFloors(
+            Array.isArray(draft.data.floors) && draft.data.floors.length > 0
+              ? draft.data.floors.map((floor) => ({
+                  ...floor,
+                  floorImage: null,
+                  preview: floor.existingImagePath || null,
+                }))
+              : request.floors || [],
+          );
+          setDraftSavedAt(draft.savedAt || "");
+        }
       } catch (error) {
         alert(
           error.response?.data?.error ||
@@ -216,6 +250,125 @@ const ConstructionForm = () => {
   const [floors, setFloors] = useState([]);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState("");
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const draftScope = editId
+    ? `edit-${editId}`
+    : companyId
+      ? `company-${companyId}`
+      : null;
+
+  const restoreDraft = () => {
+    if (!draftScope) return;
+
+    const draft = readDraft("construction-form", draftScope);
+    if (!draft?.data) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      ...(draft.data.formData || {}),
+    }));
+    setFloors(
+      Array.isArray(draft.data.floors) && draft.data.floors.length > 0
+        ? draft.data.floors.map((floor) => ({
+            ...floor,
+            floorImage: null,
+            preview: floor.existingImagePath || null,
+          }))
+        : [],
+    );
+
+    const siteFilesInput = document.getElementById("siteFiles");
+    if (siteFilesInput) {
+      siteFilesInput.value = "";
+    }
+
+    setDraftSavedAt(draft.savedAt || "");
+    setDraftHydrated(true);
+  };
+
+  const copyCurrentForm = () => {
+    if (!draftScope) return;
+
+    writeClipboard(
+      clipboardKey,
+      {
+        formData,
+        floors: floors.map(({ floorImage, preview, ...rest }) => rest),
+        companyId,
+        editId,
+      },
+      selectedCompany?.companyName ||
+        formData.projectName ||
+        "Construction request",
+    );
+    setCopiedForm(readClipboard(clipboardKey));
+  };
+
+  const pasteCopiedForm = () => {
+    if (!draftScope || !copiedForm?.data) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      ...(copiedForm.data.formData || {}),
+    }));
+    setFloors(
+      Array.isArray(copiedForm.data.floors) && copiedForm.data.floors.length > 0
+        ? copiedForm.data.floors.map((floor) => ({
+            ...floor,
+            floorImage: null,
+            preview: floor.existingImagePath || null,
+          }))
+        : [],
+    );
+
+    const siteFilesInput = document.getElementById("siteFiles");
+    if (siteFilesInput) {
+      siteFilesInput.value = "";
+    }
+
+    setDraftSavedAt("");
+  };
+
+  const handleClipboardAction = () => {
+    if (copiedForm?.data) {
+      pasteCopiedForm();
+      return;
+    }
+
+    copyCurrentForm();
+  };
+
+  const clearCopiedForm = () => {
+    clearClipboard(clipboardKey);
+    setCopiedForm(null);
+  };
+
+  const saveCurrentDraft = () => {
+    if (!draftScope) return;
+
+    const savedAt = saveDraft("construction-form", draftScope, {
+      formData,
+      floors: floors.map(({ floorImage, preview, ...rest }) => rest),
+      companyId,
+      editId,
+    });
+    setDraftSavedAt(savedAt);
+  };
+
+  const clearCurrentDraft = () => {
+    if (!draftScope) return;
+
+    clearDraft("construction-form", draftScope);
+    setDraftSavedAt("");
+  };
+
+  useEffect(() => {
+    if (draftHydrated || loadingExistingRequest) return;
+    if (!draftScope) return;
+
+    restoreDraft();
+  }, [draftScope, draftHydrated, loadingExistingRequest]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -468,6 +621,7 @@ const ConstructionForm = () => {
         if (isEditMode) {
           alert("Request updated successfully!");
         }
+        clearCurrentDraft();
         navigate("/customerdashboard/job_status");
       } else {
         setErrors((p) => ({
@@ -498,6 +652,68 @@ const ConstructionForm = () => {
             : "Construction Project Submission"}
         </h1>
         <div className="constructionform-underline" />
+      </div>
+
+      <div className="customer-form-draft-bar">
+        <div className="customer-form-draft-copy">
+          <div className="customer-form-draft-title">Drafts</div>
+          <div className="customer-form-draft-note">
+            Save this form locally and restore it later on this device.
+          </div>
+          {copiedForm?.data && (
+            <div className="customer-form-draft-clipboard">
+              Copied form ready to paste into another construction request.
+            </div>
+          )}
+          {draftSavedAt && (
+            <div className="customer-form-draft-savedAt">
+              Last saved {new Date(draftSavedAt).toLocaleString()}
+            </div>
+          )}
+        </div>
+        <div className="customer-form-draft-actions">
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-primary"
+            onClick={saveCurrentDraft}
+            disabled={!draftScope}
+          >
+            Save Draft
+          </button>
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-clipboard"
+            onClick={handleClipboardAction}
+            disabled={!draftScope}
+          >
+            {copiedForm?.data ? "Paste Copied Form" : "Copy Form"}
+          </button>
+          {copiedForm?.data && (
+            <button
+              type="button"
+              className="customer-form-draft-button customer-form-draft-button-secondary"
+              onClick={clearCopiedForm}
+            >
+              Clear Copied Form
+            </button>
+          )}
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-secondary"
+            onClick={restoreDraft}
+            disabled={!draftScope}
+          >
+            Restore Draft
+          </button>
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-secondary"
+            onClick={clearCurrentDraft}
+            disabled={!draftSavedAt}
+          >
+            Clear Draft
+          </button>
+        </div>
       </div>
 
       <div className="constructionform-content-layout">

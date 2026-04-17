@@ -2,6 +2,10 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import CustomerPageLoader from "../common/CustomerPageLoader";
+import {
+  readFavoritesByType,
+  toggleFavoriteByType,
+} from "../common/serviceFavoritesStorage";
 import "./CustomerConstruction.css";
 
 const CustomerConstruction = () => {
@@ -10,6 +14,12 @@ const CustomerConstruction = () => {
   const [error, setError] = useState(null);
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [sortBy, setSortBy] = useState("name");
+  const [viewFilter, setViewFilter] = useState("all");
+  const [favoriteCompanyIds, setFavoriteCompanyIds] = useState(() =>
+    readFavoritesByType("construction"),
+  );
+  const [hiredCompanyIds, setHiredCompanyIds] = useState([]);
+  const [companyProjectStats, setCompanyProjectStats] = useState({});
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -17,10 +27,47 @@ const CustomerConstruction = () => {
   useEffect(() => {
     const fetchCompanies = async () => {
       try {
-        const res = await axios.get("/api/construction_companies_list", {
-          withCredentials: true,
-        });
-        setCompanies(res.data.companies || []);
+        const [companiesRes, statusRes] = await Promise.allSettled([
+          axios.get("/api/construction_companies_list", {
+            withCredentials: true,
+          }),
+          axios.get("/api/job_status", { withCredentials: true }),
+        ]);
+
+        if (companiesRes.status === "fulfilled") {
+          setCompanies(companiesRes.value.data.companies || []);
+        } else {
+          throw companiesRes.reason;
+        }
+
+        if (statusRes.status === "fulfilled") {
+          const applications = statusRes.value.data?.companyApplications || [];
+          const hiredIds = new Set();
+          const statsByCompany = {};
+
+          applications.forEach((app) => {
+            const companyIdRaw = app.companyId?._id || app.companyId;
+            const companyId = companyIdRaw ? String(companyIdRaw) : "";
+            if (!companyId) return;
+
+            const status = (app.status || "").toLowerCase();
+            if (status !== "accepted") return;
+
+            hiredIds.add(companyId);
+            if (!statsByCompany[companyId]) {
+              statsByCompany[companyId] = { active: 0, finished: 0 };
+            }
+
+            if (Number(app.completionPercentage || 0) >= 100) {
+              statsByCompany[companyId].finished += 1;
+            } else {
+              statsByCompany[companyId].active += 1;
+            }
+          });
+
+          setHiredCompanyIds(Array.from(hiredIds));
+          setCompanyProjectStats(statsByCompany);
+        }
       } catch (err) {
         setError("Failed to load companies. Please try again.");
         console.error(err);
@@ -108,6 +155,32 @@ const CustomerConstruction = () => {
     );
   };
 
+  const filteredByEngagement = companies.filter((company) => {
+    const favoriteOnly =
+      viewFilter === "favorites" || viewFilter === "hired_favorites";
+    const hiredOnly =
+      viewFilter === "hired" || viewFilter === "hired_favorites";
+
+    const matchesFavorite =
+      !favoriteOnly || favoriteCompanyIds.includes(company._id);
+    const matchesHired = !hiredOnly || hiredCompanyIds.includes(company._id);
+
+    return matchesFavorite && matchesHired;
+  });
+
+  const displayedCompanies =
+    viewFilter === "rating"
+      ? [...filteredByEngagement].sort(
+          (a, b) =>
+            (Number(b.averageRating) || 0) - (Number(a.averageRating) || 0),
+        )
+      : filteredByEngagement;
+
+  const handleToggleFavorite = (event, companyId) => {
+    event.stopPropagation();
+    setFavoriteCompanyIds(toggleFavoriteByType("construction", companyId));
+  };
+
   if (loading) {
     return (
       <CustomerPageLoader
@@ -133,9 +206,10 @@ const CustomerConstruction = () => {
       <div className="controls-bar">
         <div className="controls-container">
           <div className="results-count">
-            <span className="count-number">{companies.length}</span>
+            <span className="count-number">{filteredByEngagement.length}</span>
             <span className="count-label">
-              {companies.length === 1 ? "Company" : "Companies"} Available
+              {filteredByEngagement.length === 1 ? "Company" : "Companies"}{" "}
+              Available
             </span>
           </div>
           <div className="sort-wrapper">
@@ -154,18 +228,48 @@ const CustomerConstruction = () => {
               <option value="years">Years of Experience</option>
             </select>
           </div>
+          <div className="sort-wrapper">
+            <label htmlFor="view-select" className="sort-label">
+              <i className="fas fa-sliders-h"></i>
+              Filter:
+            </label>
+            <select
+              id="view-select"
+              className="sort-select"
+              value={viewFilter}
+              onChange={(e) => setViewFilter(e.target.value)}
+            >
+              <option value="all">All</option>
+              <option value="favorites">Favorites Only</option>
+              <option value="hired">Previously Hired</option>
+              <option value="hired_favorites">Hired + Favorites</option>
+              <option value="rating">Rating</option>
+            </select>
+          </div>
         </div>
       </div>
 
       <div className="companies-grid">
-        {companies.length > 0 ? (
-          companies.map((company) => (
+        {displayedCompanies.length > 0 ? (
+          displayedCompanies.map((company) => (
             <div
               key={company._id}
               className="company-card"
               data-id={company._id}
             >
               <div className="card-header">
+                <button
+                  type="button"
+                  className={`favorite-star-btn ${favoriteCompanyIds.includes(company._id) ? "active" : ""}`}
+                  onClick={(event) => handleToggleFavorite(event, company._id)}
+                  aria-label={
+                    favoriteCompanyIds.includes(company._id)
+                      ? "Remove from favorites"
+                      : "Add to favorites"
+                  }
+                >
+                  <i className="fas fa-star"></i>
+                </button>
                 <h3 className="company-name">{company.companyName}</h3>
                 <div className="company-stats-inline">
                   <div className="stat-pill">
@@ -176,6 +280,25 @@ const CustomerConstruction = () => {
                     <i className="fas fa-calendar-alt"></i>
                     <span>{company.yearsInBusiness || 0} Years</span>
                   </div>
+                  {(viewFilter === "hired" ||
+                    viewFilter === "hired_favorites") &&
+                    companyProjectStats[company._id] && (
+                      <>
+                        <div className="stat-pill stat-pill-history">
+                          <i className="fas fa-play-circle"></i>
+                          <span>
+                            Active: {companyProjectStats[company._id].active}
+                          </span>
+                        </div>
+                        <div className="stat-pill stat-pill-history">
+                          <i className="fas fa-check-circle"></i>
+                          <span>
+                            Finished:{" "}
+                            {companyProjectStats[company._id].finished}
+                          </span>
+                        </div>
+                      </>
+                    )}
                 </div>
               </div>
 
@@ -235,7 +358,11 @@ const CustomerConstruction = () => {
         ) : (
           <div className="no-results">
             <i className="fas fa-search"></i>
-            <p>No construction companies found.</p>
+            <p>
+              {viewFilter === "hired" || viewFilter === "hired_favorites"
+                ? "No previously hired companies found."
+                : "No construction companies found for this filter."}
+            </p>
           </div>
         )}
       </div>

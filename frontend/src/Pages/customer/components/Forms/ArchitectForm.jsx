@@ -4,6 +4,15 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchCustomerProfile } from "../../../../store/slices/customerProfileSlice";
 import axios from "axios";
 import CustomerPageLoader from "../common/CustomerPageLoader";
+import {
+  clearDraft,
+  clearClipboard,
+  readClipboard,
+  readDraft,
+  saveDraft,
+  writeClipboard,
+} from "./formDraftStorage";
+import "./formDraftControls.css";
 import "./ArchitectForm.css";
 
 const ArchitectForm = () => {
@@ -19,6 +28,10 @@ const ArchitectForm = () => {
   const [selectedWorker, setSelectedWorker] = useState(null);
   const [workerDetailsLoading, setWorkerDetailsLoading] = useState(false);
   const isEditMode = Boolean(editId);
+  const clipboardKey = "architect-form";
+  const [copiedForm, setCopiedForm] = useState(() =>
+    readClipboard(clipboardKey),
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -221,6 +234,104 @@ const ArchitectForm = () => {
   // ---------- Validation ----------
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState("");
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const draftScope = editId
+    ? `edit-${editId}`
+    : workerId
+      ? `worker-${workerId}`
+      : null;
+
+  const restoreDraft = () => {
+    if (!draftScope) return;
+
+    const draft = readDraft("architect-form", draftScope);
+    if (!draft?.data) return;
+
+    setForm((prev) => ({
+      ...prev,
+      ...(draft.data.form || {}),
+      floorRequirements: Array.isArray(draft.data.form?.floorRequirements)
+        ? draft.data.form.floorRequirements
+        : prev.floorRequirements,
+    }));
+    setWorkerId(draft.data.workerId || "");
+    setEditId(draft.data.editId || editId || "");
+    setFiles([]);
+    setPreviews([]);
+    setDraftSavedAt(draft.savedAt || "");
+    setDraftHydrated(true);
+  };
+
+  const copyCurrentForm = () => {
+    if (!draftScope) return;
+
+    writeClipboard(
+      clipboardKey,
+      {
+        form,
+        workerId,
+        editId,
+      },
+      selectedWorker?.name || form.projectName || "Architect request",
+    );
+    setCopiedForm(readClipboard(clipboardKey));
+  };
+
+  const pasteCopiedForm = () => {
+    if (!draftScope || !copiedForm?.data?.form) return;
+
+    const copiedFormState = copiedForm.data.form;
+    setForm((prev) => ({
+      ...prev,
+      ...copiedFormState,
+      floorRequirements: Array.isArray(copiedFormState.floorRequirements)
+        ? copiedFormState.floorRequirements
+        : prev.floorRequirements,
+    }));
+    setFiles([]);
+    setPreviews([]);
+    setDraftSavedAt("");
+  };
+
+  const handleClipboardAction = () => {
+    if (copiedForm?.data?.form) {
+      pasteCopiedForm();
+      return;
+    }
+
+    copyCurrentForm();
+  };
+
+  const clearCopiedForm = () => {
+    clearClipboard(clipboardKey);
+    setCopiedForm(null);
+  };
+
+  const saveCurrentDraft = () => {
+    if (!draftScope) return;
+
+    const savedAt = saveDraft("architect-form", draftScope, {
+      form,
+      workerId,
+      editId,
+    });
+    setDraftSavedAt(savedAt);
+  };
+
+  const clearCurrentDraft = () => {
+    if (!draftScope) return;
+
+    clearDraft("architect-form", draftScope);
+    setDraftSavedAt("");
+  };
+
+  useEffect(() => {
+    if (draftHydrated || loadingExistingRequest) return;
+    if (!draftScope) return;
+
+    restoreDraft();
+  }, [draftScope, draftHydrated, loadingExistingRequest]);
 
   const validate = () => {
     const err = {};
@@ -365,6 +476,68 @@ const ArchitectForm = () => {
             : "Architectural Design Request Form"}
         </h1>
         <div className="architect-form-underline"></div>
+      </div>
+
+      <div className="customer-form-draft-bar">
+        <div className="customer-form-draft-copy">
+          <div className="customer-form-draft-title">Drafts</div>
+          <div className="customer-form-draft-note">
+            Save this form locally and restore it later on this device.
+          </div>
+          {copiedForm?.data?.form && (
+            <div className="customer-form-draft-clipboard">
+              Copied form ready to paste into another architect request.
+            </div>
+          )}
+          {draftSavedAt && (
+            <div className="customer-form-draft-savedAt">
+              Last saved {new Date(draftSavedAt).toLocaleString()}
+            </div>
+          )}
+        </div>
+        <div className="customer-form-draft-actions">
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-primary"
+            onClick={saveCurrentDraft}
+            disabled={!draftScope}
+          >
+            Save Draft
+          </button>
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-clipboard"
+            onClick={handleClipboardAction}
+            disabled={!draftScope}
+          >
+            {copiedForm?.data?.form ? "Paste Copied Form" : "Copy Form"}
+          </button>
+          {copiedForm?.data?.form && (
+            <button
+              type="button"
+              className="customer-form-draft-button customer-form-draft-button-secondary"
+              onClick={clearCopiedForm}
+            >
+              Clear Copied Form
+            </button>
+          )}
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-secondary"
+            onClick={restoreDraft}
+            disabled={!draftScope}
+          >
+            Restore Draft
+          </button>
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-secondary"
+            onClick={clearCurrentDraft}
+            disabled={!draftSavedAt}
+          >
+            Clear Draft
+          </button>
+        </div>
       </div>
 
       <div className="architect-form-content-layout">

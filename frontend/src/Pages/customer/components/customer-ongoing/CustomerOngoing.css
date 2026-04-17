@@ -202,6 +202,23 @@ body {
   transform: translateY(-2px);
 }
 
+.co-notification-highlight {
+  border-color: #f59e0b !important;
+  box-shadow:
+    0 0 0 3px rgba(245, 158, 11, 0.22),
+    0 4px 14px rgba(0, 0, 0, 0.12) !important;
+  animation: co-notification-pulse 3.5s ease-out 1;
+}
+
+@keyframes co-notification-pulse {
+  0% {
+    background-color: rgba(245, 158, 11, 0.15);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
 .co-project-image {
   width: 35%;
   position: relative;

@@ -274,6 +274,23 @@
   border: 1px solid #67e8f9;
 }
 
+.cjs-notification-highlight {
+  border-color: #f59e0b !important;
+  box-shadow:
+    0 0 0 3px rgba(245, 158, 11, 0.22),
+    0 14px 32px rgba(21, 31, 73, 0.09) !important;
+  animation: cjs-notification-pulse 3.5s ease-out 1;
+}
+
+@keyframes cjs-notification-pulse {
+  0% {
+    background-color: rgba(245, 158, 11, 0.2);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
 .cjs-chat-button {
   display: inline-flex;
   align-items: center;

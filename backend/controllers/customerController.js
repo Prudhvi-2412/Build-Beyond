@@ -1641,63 +1641,253 @@ const getPaymentHistory = async (req, res) => {
 
     const customerId = req.user.user_id;
     const { Transaction } = require("../models/index");
+    const customerPaymentTypes = [
+      "escrow_hold",
+      "milestone_release",
+      "platform_fee_collection",
+      "subscription_fee",
+      "refund",
+    ];
 
-    // Get all transactions for this customer
+    const normalizeHiredType = (projectType) => {
+      const normalized = (projectType || "").toLowerCase();
+      if (normalized === "architect") return "architect";
+      if (normalized === "interior") return "interior";
+      if (normalized === "construction" || normalized === "company") {
+        return "company";
+      }
+      return "other";
+    };
+
+    const getHiredTypeLabel = (hiredType) => {
+      if (hiredType === "architect") return "Architect";
+      if (hiredType === "interior") return "Interior Designer";
+      if (hiredType === "company") return "Company";
+      return "Other";
+    };
+
+    const getPaymentPurpose = (transaction) => {
+      const transactionType = transaction.transactionType;
+      const description = transaction.description || "";
+      const milestoneValue =
+        transaction.milestonePercentage ||
+        transaction.metadata?.percentage ||
+        transaction.metadata?.milestone;
+
+      if (transactionType === "escrow_hold") {
+        if (
+          transaction.metadata?.type === "deposit" ||
+          /initial deposit/i.test(description)
+        ) {
+          return "Initial Deposit";
+        }
+
+        if (milestoneValue) {
+          return `${milestoneValue}% Milestone Payment`;
+        }
+
+        return "Project Payment";
+      }
+
+      if (transactionType === "platform_fee_collection") {
+        return "Platform Fee Payment";
+      }
+
+      if (transactionType === "milestone_release") {
+        if (milestoneValue) {
+          return `${milestoneValue}% Stage Payment`;
+        }
+        return "Stage Payment";
+      }
+
+      if (transactionType === "subscription_fee") {
+        return "Subscription Payment";
+      }
+
+      if (transactionType === "refund") {
+        return "Refund Received";
+      }
+
+      return description || "Payment";
+    };
+
+    // Get all customer-paid transactions for this customer
     const transactions = await Transaction.find({
       customerId: customerId,
-      status: "completed",
+      transactionType: { $in: customerPaymentTypes },
+      status: { $in: ["completed", "refunded"] },
     })
       .populate("workerId", "name email")
-      .populate("projectId", "projectName")
+      .populate("companyId", "companyName contactPerson email")
       .sort({ createdAt: -1 })
       .lean();
 
+    const architectProjectIds = [];
+    const interiorProjectIds = [];
+    const companyProjectIds = [];
+
+    transactions.forEach((transaction) => {
+      if (!transaction.projectId) return;
+      const normalizedType = normalizeHiredType(transaction.projectType);
+      const projectId = String(transaction.projectId);
+
+      if (normalizedType === "architect") architectProjectIds.push(projectId);
+      if (normalizedType === "interior") interiorProjectIds.push(projectId);
+      if (normalizedType === "company") companyProjectIds.push(projectId);
+    });
+
+    const [architectProjects, interiorProjects, companyProjects] =
+      await Promise.all([
+        architectProjectIds.length
+          ? ArchitectHiring.find({
+              _id: { $in: architectProjectIds },
+              customer: customerId,
+            })
+              .select("projectName worker")
+              .populate("worker", "name email")
+              .lean()
+          : [],
+        interiorProjectIds.length
+          ? DesignRequest.find({
+              _id: { $in: interiorProjectIds },
+              customerId: customerId,
+            })
+              .select("projectName workerId")
+              .populate("workerId", "name email")
+              .lean()
+          : [],
+        companyProjectIds.length
+          ? ConstructionProjectSchema.find({
+              _id: { $in: companyProjectIds },
+              customerId: customerId,
+            })
+              .select("projectName companyId")
+              .populate("companyId", "companyName contactPerson email")
+              .lean()
+          : [],
+      ]);
+
+    const architectProjectMap = new Map(
+      architectProjects.map((project) => [String(project._id), project]),
+    );
+    const interiorProjectMap = new Map(
+      interiorProjects.map((project) => [String(project._id), project]),
+    );
+    const companyProjectMap = new Map(
+      companyProjects.map((project) => [String(project._id), project]),
+    );
+
+    const enrichedTransactions = transactions.map((transaction) => {
+      const hiredType = normalizeHiredType(transaction.projectType);
+      const projectId = transaction.projectId
+        ? String(transaction.projectId)
+        : null;
+
+      let projectName = "Project";
+      let providerName = null;
+
+      if (hiredType === "architect" && projectId) {
+        const project = architectProjectMap.get(projectId);
+        if (project) {
+          projectName = project.projectName || projectName;
+          providerName = project.worker?.name || null;
+        }
+      }
+
+      if (hiredType === "interior" && projectId) {
+        const project = interiorProjectMap.get(projectId);
+        if (project) {
+          projectName = project.projectName || projectName;
+          providerName = project.workerId?.name || null;
+        }
+      }
+
+      if (hiredType === "company" && projectId) {
+        const project = companyProjectMap.get(projectId);
+        if (project) {
+          projectName = project.projectName || projectName;
+          providerName =
+            project.companyId?.companyName ||
+            project.companyId?.contactPerson ||
+            null;
+        }
+      }
+
+      if (!providerName) {
+        providerName =
+          transaction.workerId?.name ||
+          transaction.companyId?.companyName ||
+          transaction.companyId?.contactPerson ||
+          null;
+      }
+
+      return {
+        ...transaction,
+        hiredType,
+        hiredTypeLabel: getHiredTypeLabel(hiredType),
+        projectName,
+        providerName,
+        paymentPurpose: getPaymentPurpose(transaction),
+      };
+    });
+
     // Calculate stats
-    const totalPaid = transactions
-      .filter((t) =>
-        ["escrow_hold", "milestone_release"].includes(t.transactionType),
-      )
+    const totalPaid = enrichedTransactions
+      .filter((t) => t.transactionType !== "refund")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const totalRefunded = enrichedTransactions
+      .filter((t) => t.transactionType === "refund")
       .reduce((sum, t) => sum + t.amount, 0);
 
     // Get unique projects
     const uniqueProjects = [
       ...new Set(
-        transactions.map((t) => t.projectId?._id?.toString()).filter(Boolean),
+        enrichedTransactions
+          .map((t) => (t.projectId ? String(t.projectId) : null))
+          .filter(Boolean),
       ),
     ];
     const totalProjects = uniqueProjects.length;
 
     // Get pending payments (projects with Accepted status but not all milestones paid)
-    const architectProjects = await ArchitectHiring.find({
+    const pendingArchitectProjects = await ArchitectHiring.find({
       customer: customerId,
       status: "Accepted",
     }).lean();
 
-    const interiorProjects = await DesignRequest.find({
+    const pendingInteriorProjects = await DesignRequest.find({
       customerId: customerId,
       status: "accepted",
     }).lean();
 
     let pendingPayments = 0;
 
-    [...architectProjects, ...interiorProjects].forEach((project) => {
-      if (project.paymentDetails && project.paymentDetails.milestonePayments) {
-        const unpaidMilestones =
-          project.paymentDetails.milestonePayments.filter(
-            (mp) => !mp.paymentCollected && mp.status === "pending",
+    [...pendingArchitectProjects, ...pendingInteriorProjects].forEach(
+      (project) => {
+        if (
+          project.paymentDetails &&
+          project.paymentDetails.milestonePayments
+        ) {
+          const unpaidMilestones =
+            project.paymentDetails.milestonePayments.filter(
+              (mp) => !mp.paymentCollected && mp.status === "pending",
+            );
+          pendingPayments += unpaidMilestones.reduce(
+            (sum, mp) => sum + mp.amount,
+            0,
           );
-        pendingPayments += unpaidMilestones.reduce(
-          (sum, mp) => sum + mp.amount,
-          0,
-        );
-      }
-    });
+        }
+      },
+    );
 
     res.json({
       success: true,
-      transactions: transactions,
+      transactions: enrichedTransactions,
       stats: {
         totalPaid: totalPaid,
+        totalRefunded,
+        netPaid: totalPaid - totalRefunded,
         totalProjects: totalProjects,
         pendingPayments: pendingPayments,
       },

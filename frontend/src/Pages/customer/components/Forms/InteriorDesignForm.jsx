@@ -6,6 +6,15 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchCustomerProfile } from "../../../../store/slices/customerProfileSlice";
 import axios from "axios";
 import CustomerPageLoader from "../common/CustomerPageLoader";
+import {
+  clearDraft,
+  clearClipboard,
+  readClipboard,
+  readDraft,
+  saveDraft,
+  writeClipboard,
+} from "./formDraftStorage";
+import "./formDraftControls.css";
 import "./InteriorDesignForm.css";
 
 const InteriorDesignForm = () => {
@@ -21,6 +30,10 @@ const InteriorDesignForm = () => {
   const [selectedWorker, setSelectedWorker] = useState(null);
   const [workerDetailsLoading, setWorkerDetailsLoading] = useState(false);
   const isEditMode = Boolean(editId);
+  const clipboardKey = "interior-form";
+  const [copiedForm, setCopiedForm] = useState(() =>
+    readClipboard(clipboardKey),
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -173,6 +186,24 @@ const InteriorDesignForm = () => {
         if (request.workerId) {
           setWorkerId(request.workerId);
         }
+
+        const draftKey = request.workerId
+          ? `worker-${request.workerId}`
+          : `edit-${editId}`;
+        const draft = readDraft("interior-form", draftKey);
+        if (draft?.data) {
+          setFormData((prev) => ({
+            ...prev,
+            ...(draft.data.formData || {}),
+          }));
+          setFloorRequirements(
+            Array.isArray(draft.data.floorRequirements) &&
+              draft.data.floorRequirements.length > 0
+              ? draft.data.floorRequirements
+              : request.floorRequirements || [{ floorNumber: 1, details: "" }],
+          );
+          setDraftSavedAt(draft.savedAt || "");
+        }
       } catch (error) {
         alert(
           error.response?.data?.error ||
@@ -251,6 +282,114 @@ const InteriorDesignForm = () => {
   // ---------- Validation ----------
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState("");
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const draftScope = editId
+    ? `edit-${editId}`
+    : workerId
+      ? `worker-${workerId}`
+      : null;
+
+  const restoreDraft = () => {
+    if (!draftScope) return;
+
+    const draft = readDraft("interior-form", draftScope);
+    if (!draft?.data) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      ...(draft.data.formData || {}),
+    }));
+    setFloorRequirements(
+      Array.isArray(draft.data.floorRequirements) &&
+        draft.data.floorRequirements.length > 0
+        ? draft.data.floorRequirements
+        : [{ floorNumber: 1, details: "" }],
+    );
+    setCurrentFiles([]);
+    setCurrentPreviews([]);
+    setInspirationFiles([]);
+    setInspirationPreviews([]);
+    setDraftSavedAt(draft.savedAt || "");
+    setDraftHydrated(true);
+  };
+
+  const copyCurrentForm = () => {
+    if (!draftScope) return;
+
+    writeClipboard(
+      clipboardKey,
+      {
+        formData,
+        floorRequirements,
+        workerId,
+        editId,
+      },
+      selectedWorker?.name || formData.projectName || "Interior request",
+    );
+    setCopiedForm(readClipboard(clipboardKey));
+  };
+
+  const pasteCopiedForm = () => {
+    if (!draftScope || !copiedForm?.data) return;
+
+    const copiedFormData = copiedForm.data.formData || {};
+    setFormData((prev) => ({
+      ...prev,
+      ...copiedFormData,
+    }));
+    setFloorRequirements(
+      Array.isArray(copiedForm.data.floorRequirements) &&
+        copiedForm.data.floorRequirements.length > 0
+        ? copiedForm.data.floorRequirements
+        : [{ floorNumber: 1, details: "" }],
+    );
+    setCurrentFiles([]);
+    setCurrentPreviews([]);
+    setInspirationFiles([]);
+    setInspirationPreviews([]);
+    setDraftSavedAt("");
+  };
+
+  const handleClipboardAction = () => {
+    if (copiedForm?.data) {
+      pasteCopiedForm();
+      return;
+    }
+
+    copyCurrentForm();
+  };
+
+  const clearCopiedForm = () => {
+    clearClipboard(clipboardKey);
+    setCopiedForm(null);
+  };
+
+  const saveCurrentDraft = () => {
+    if (!draftScope) return;
+
+    const savedAt = saveDraft("interior-form", draftScope, {
+      formData,
+      floorRequirements,
+      workerId,
+      editId,
+    });
+    setDraftSavedAt(savedAt);
+  };
+
+  const clearCurrentDraft = () => {
+    if (!draftScope) return;
+
+    clearDraft("interior-form", draftScope);
+    setDraftSavedAt("");
+  };
+
+  useEffect(() => {
+    if (draftHydrated || loadingExistingRequest) return;
+    if (!draftScope) return;
+
+    restoreDraft();
+  }, [draftScope, draftHydrated, loadingExistingRequest]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -359,6 +498,7 @@ const InteriorDesignForm = () => {
         if (isEditMode) {
           alert("Request updated successfully!");
         }
+        clearCurrentDraft();
         navigate("/customerdashboard/job_status");
         return;
       } else {
@@ -384,6 +524,68 @@ const InteriorDesignForm = () => {
             : "Interior Design Request Form"}
         </h1>
         <div className="interior-form-underline"></div>
+      </div>
+
+      <div className="customer-form-draft-bar">
+        <div className="customer-form-draft-copy">
+          <div className="customer-form-draft-title">Drafts</div>
+          <div className="customer-form-draft-note">
+            Save this form locally and restore it later on this device.
+          </div>
+          {copiedForm?.data && (
+            <div className="customer-form-draft-clipboard">
+              Copied form ready to paste into another interior request.
+            </div>
+          )}
+          {draftSavedAt && (
+            <div className="customer-form-draft-savedAt">
+              Last saved {new Date(draftSavedAt).toLocaleString()}
+            </div>
+          )}
+        </div>
+        <div className="customer-form-draft-actions">
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-primary"
+            onClick={saveCurrentDraft}
+            disabled={!draftScope}
+          >
+            Save Draft
+          </button>
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-clipboard"
+            onClick={handleClipboardAction}
+            disabled={!draftScope}
+          >
+            {copiedForm?.data ? "Paste Copied Form" : "Copy Form"}
+          </button>
+          {copiedForm?.data && (
+            <button
+              type="button"
+              className="customer-form-draft-button customer-form-draft-button-secondary"
+              onClick={clearCopiedForm}
+            >
+              Clear Copied Form
+            </button>
+          )}
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-secondary"
+            onClick={restoreDraft}
+            disabled={!draftScope}
+          >
+            Restore Draft
+          </button>
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-secondary"
+            onClick={clearCurrentDraft}
+            disabled={!draftSavedAt}
+          >
+            Clear Draft
+          </button>
+        </div>
       </div>
 
       <div className="interior-form-content-layout">

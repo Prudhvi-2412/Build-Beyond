@@ -1,6 +1,7 @@
 // src/Pages/customer/components/customer-ongoing/CustomerOngoing.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import { useSearchParams } from "react-router-dom";
 import "./CustomerOngoing.css";
 import Modal from "react-modal";
 import CompanyPaymentModal from "../customer-payments/CompanyPaymentModal";
@@ -9,6 +10,7 @@ import CustomerPageLoader from "../common/CustomerPageLoader";
 const CURRENCY_EPSILON = 0.01;
 
 const CustomerOngoing = () => {
+  const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
   const [filter, setFilter] = useState("all");
   const [expandedDetails, setExpandedDetails] = useState({});
@@ -152,6 +154,72 @@ const CustomerOngoing = () => {
     };
     fetchProjects();
   }, []);
+
+  useEffect(() => {
+    const projectId = searchParams.get("projectId");
+    if (!projectId || projects.length === 0) return;
+
+    const section = searchParams.get("section") || "details";
+    const projectExists = projects.some(
+      (project) => String(project._id) === String(projectId),
+    );
+    if (!projectExists) return;
+
+    setFilter("all");
+    setExpandedDetails((prev) => ({
+      ...prev,
+      [projectId]: section === "details" || section === "review",
+    }));
+    setExpandedMilestones((prev) => ({
+      ...prev,
+      [projectId]: section === "milestones",
+    }));
+    setExpandedUpdates((prev) => ({
+      ...prev,
+      [projectId]: section === "updates" || section === "review",
+    }));
+    setExpandedProposal((prev) => ({
+      ...prev,
+      [projectId]: section === "proposal",
+    }));
+    setShowReviewProjectId(section === "review" ? projectId : null);
+
+    const scrollTimer = window.setTimeout(() => {
+      document.getElementById(`co-project-${projectId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 100);
+
+    const highlightTargetBySection = {
+      details: `details-${projectId}`,
+      milestones: `milestones-${projectId}`,
+      updates: `updates-${projectId}`,
+      review: `co-project-${projectId}`,
+      proposal: `co-project-${projectId}`,
+    };
+
+    const highlightTargetId =
+      highlightTargetBySection[section] || `co-project-${projectId}`;
+
+    const highlightTimer = window.setTimeout(() => {
+      const targetElement =
+        document.getElementById(highlightTargetId) ||
+        document.getElementById(`co-project-${projectId}`);
+
+      if (!targetElement) return;
+
+      targetElement.classList.add("co-notification-highlight");
+      window.setTimeout(() => {
+        targetElement.classList.remove("co-notification-highlight");
+      }, 3500);
+    }, 220);
+
+    return () => {
+      window.clearTimeout(scrollTimer);
+      window.clearTimeout(highlightTimer);
+    };
+  }, [searchParams, projects]);
 
   const toggleDetails = (id) => {
     setExpandedDetails((prev) => ({
@@ -475,7 +543,10 @@ const CustomerOngoing = () => {
               filteredProjects.map((project) => (
                 <React.Fragment key={project._id}>
                   {/* PROJECT CARD */}
-                  <div className="co-project-display">
+                  <div
+                    className="co-project-display"
+                    id={`co-project-${project._id}`}
+                  >
                     <div className="co-project-main">
                       <div className="co-project-image">
                         <img

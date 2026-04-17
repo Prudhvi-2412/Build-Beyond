@@ -26,47 +26,52 @@ const Customer = () => {
   return (
     <>
       <CustomerNavbar />
-      <Routes>
-        {/* THIS IS THE KEY: Wrap all sub-routes in path="*" */}
-        <Route
-          path="*"
-          element={
-            <Routes>
-              <Route path="home" element={<CustomerHome />} />
-              <Route
-                path="construction_companies_list"
-                element={<CustomerConstruction />}
-              />
-              <Route path="architect" element={<CustomerArchitect />} />
-              <Route path="architect_form" element={<ArchitectForm />} />
-              <Route path="interior_designer" element={<CustomerInterior />} />
-              <Route
-                path="interiordesign_form"
-                element={<InteriorDesignForm />}
-              />
-              <Route path="ongoing_projects" element={<CustomerOngoing />} />
-              <Route path="bidspace" element={<CustomerBidspace />} />
-              <Route path="bidform" element={<BidForm />} />
-              <Route path="job_status" element={<CustomerJobStatus />} />
-              <Route path="customersettings" element={<CustomerSettings />} />
-              <Route
-                path="payment-history"
-                element={<CustomerPaymentHistory />}
-              />
-              <Route
-                path="payment-checkout/:projectId"
-                element={<PaymentCheckout />}
-              />
-              <Route path="constructionform" element={<ConstructionForm />} />
-              <Route
-                path="chat/:roomId"
-                element={<Chat userRole="customer" />}
-              />
-              <Route path="*" element={<CustomerHome />} />
-            </Routes>
-          }
-        />
-      </Routes>
+      <div style={{ paddingTop: "70px" }}>
+        <Routes>
+          {/* THIS IS THE KEY: Wrap all sub-routes in path="*" */}
+          <Route
+            path="*"
+            element={
+              <Routes>
+                <Route path="home" element={<CustomerHome />} />
+                <Route
+                  path="construction_companies_list"
+                  element={<CustomerConstruction />}
+                />
+                <Route path="architect" element={<CustomerArchitect />} />
+                <Route path="architect_form" element={<ArchitectForm />} />
+                <Route
+                  path="interior_designer"
+                  element={<CustomerInterior />}
+                />
+                <Route
+                  path="interiordesign_form"
+                  element={<InteriorDesignForm />}
+                />
+                <Route path="ongoing_projects" element={<CustomerOngoing />} />
+                <Route path="bidspace" element={<CustomerBidspace />} />
+                <Route path="bidform" element={<BidForm />} />
+                <Route path="job_status" element={<CustomerJobStatus />} />
+                <Route path="customersettings" element={<CustomerSettings />} />
+                <Route
+                  path="payment-history"
+                  element={<CustomerPaymentHistory />}
+                />
+                <Route
+                  path="payment-checkout/:projectId"
+                  element={<PaymentCheckout />}
+                />
+                <Route path="constructionform" element={<ConstructionForm />} />
+                <Route
+                  path="chat/:roomId"
+                  element={<Chat userRole="customer" />}
+                />
+                <Route path="*" element={<CustomerHome />} />
+              </Routes>
+            }
+          />
+        </Routes>
+      </div>
       <CustomerFooter />
     </>
   );

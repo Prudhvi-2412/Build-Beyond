@@ -2,6 +2,10 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import CustomerPageLoader from "../common/CustomerPageLoader";
+import {
+  readFavoritesByType,
+  toggleFavoriteByType,
+} from "../common/serviceFavoritesStorage";
 import "./CustomerArchitect.css";
 
 const CustomerArchitect = () => {
@@ -10,19 +14,73 @@ const CustomerArchitect = () => {
   const [selectedArchitectId, setSelectedArchitectId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterSpecialty, setFilterSpecialty] = useState("all");
+  const [viewFilter, setViewFilter] = useState("all");
+  const [favoriteArchitectIds, setFavoriteArchitectIds] = useState(() =>
+    readFavoritesByType("architect"),
+  );
+  const [hiredArchitectIds, setHiredArchitectIds] = useState([]);
+  const [architectProjectStats, setArchitectProjectStats] = useState({});
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   useEffect(() => {
-    axios
-      .get("/api/architect")
-      .then((response) => {
-        setArchitects(response.data.architects || []);
-      })
-      .catch((error) => {
-        console.error("Error fetching architects:", error);
-      })
-      .finally(() => setLoading(false));
+    const loadArchitectData = async () => {
+      try {
+        const [architectRes, statusRes] = await Promise.allSettled([
+          axios.get("/api/architect"),
+          axios.get("/api/job_status", { withCredentials: true }),
+        ]);
+
+        if (architectRes.status === "fulfilled") {
+          setArchitects(architectRes.value.data.architects || []);
+        } else {
+          console.error("Error fetching architects:", architectRes.reason);
+        }
+
+        if (statusRes.status === "fulfilled") {
+          const applications =
+            statusRes.value.data?.architectApplications || [];
+          const hiredIds = new Set();
+          const statsByArchitect = {};
+
+          applications.forEach((app) => {
+            const workerIdRaw =
+              app.worker?._id ||
+              app.workerId?._id ||
+              app.worker ||
+              app.workerId;
+            const workerId = workerIdRaw ? String(workerIdRaw) : "";
+            if (!workerId) return;
+
+            const status = (app.status || "").toLowerCase();
+            const isHired = [
+              "accepted",
+              "completed",
+              "pending payment",
+            ].includes(status);
+            if (!isHired) return;
+
+            hiredIds.add(workerId);
+            if (!statsByArchitect[workerId]) {
+              statsByArchitect[workerId] = { active: 0, finished: 0 };
+            }
+
+            if (status === "completed") {
+              statsByArchitect[workerId].finished += 1;
+            } else {
+              statsByArchitect[workerId].active += 1;
+            }
+          });
+
+          setHiredArchitectIds(Array.from(hiredIds));
+          setArchitectProjectStats(statsByArchitect);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadArchitectData();
   }, []);
 
   const specialties = [
@@ -44,8 +102,34 @@ const CustomerArchitect = () => {
           (s) => s.toLowerCase() === filterSpecialty.toLowerCase(),
         ));
 
-    return matchesSearch && matchesSpecialty;
+    const ratingMode = viewFilter === "rating";
+    const favoriteOnly =
+      !ratingMode &&
+      (viewFilter === "favorites" || viewFilter === "hired_favorites");
+    const hiredOnly =
+      !ratingMode &&
+      (viewFilter === "hired" || viewFilter === "hired_favorites");
+
+    const matchesFavorite =
+      !favoriteOnly || favoriteArchitectIds.includes(architect._id);
+
+    const matchesHired =
+      !hiredOnly || hiredArchitectIds.includes(architect._id);
+
+    return matchesSearch && matchesSpecialty && matchesFavorite && matchesHired;
   });
+
+  const displayedArchitects =
+    viewFilter === "rating"
+      ? [...filteredArchitects].sort(
+          (a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0),
+        )
+      : filteredArchitects;
+
+  const handleToggleFavorite = (event, architectId) => {
+    event.stopPropagation();
+    setFavoriteArchitectIds(toggleFavoriteByType("architect", architectId));
+  };
 
   const handleCardClick = (id) => {
     setSelectedArchitectId(id);
@@ -124,10 +208,27 @@ const CustomerArchitect = () => {
                 ))}
             </select>
           </div>
+          <div className="filter-box">
+            <label htmlFor="view-filter">
+              <i className="fas fa-sliders-h"></i>
+              Filter:
+            </label>
+            <select
+              id="view-filter"
+              value={viewFilter}
+              onChange={(e) => setViewFilter(e.target.value)}
+            >
+              <option value="all">All</option>
+              <option value="favorites">Favorites Only</option>
+              <option value="hired">Previously Hired</option>
+              <option value="hired_favorites">Hired + Favorites</option>
+              <option value="rating">Rating</option>
+            </select>
+          </div>
           <div className="results-count">
-            <span className="count-number">{filteredArchitects.length}</span>
+            <span className="count-number">{displayedArchitects.length}</span>
             <span className="count-label">
-              {filteredArchitects.length === 1 ? "Architect" : "Architects"}
+              {displayedArchitects.length === 1 ? "Architect" : "Architects"}
             </span>
           </div>
         </div>
@@ -138,8 +239,8 @@ const CustomerArchitect = () => {
       >
         {!selectedArchitectId ? (
           <div className="architects-grid">
-            {filteredArchitects.length > 0 ? (
-              filteredArchitects.map((architect) => (
+            {displayedArchitects.length > 0 ? (
+              displayedArchitects.map((architect) => (
                 <div key={architect._id} className="architect-wrapper">
                   <div
                     className={`architect-card ${
@@ -148,6 +249,20 @@ const CustomerArchitect = () => {
                     onClick={() => handleCardClick(architect._id)}
                   >
                     <div className="architect-card-header">
+                      <button
+                        type="button"
+                        className={`favorite-star-btn ${favoriteArchitectIds.includes(architect._id) ? "active" : ""}`}
+                        onClick={(event) =>
+                          handleToggleFavorite(event, architect._id)
+                        }
+                        aria-label={
+                          favoriteArchitectIds.includes(architect._id)
+                            ? "Remove from favorites"
+                            : "Add to favorites"
+                        }
+                      >
+                        <i className="fas fa-star"></i>
+                      </button>
                       <img
                         src={
                           architect.profileImage ||
@@ -202,6 +317,20 @@ const CustomerArchitect = () => {
                             )}
                           </div>
                         )}
+                      {(viewFilter === "hired" ||
+                        viewFilter === "hired_favorites") &&
+                        architectProjectStats[architect._id] && (
+                          <div className="provider-history-row">
+                            <span className="provider-history-pill">
+                              Active:{" "}
+                              {architectProjectStats[architect._id].active}
+                            </span>
+                            <span className="provider-history-pill">
+                              Finished:{" "}
+                              {architectProjectStats[architect._id].finished}
+                            </span>
+                          </div>
+                        )}
                     </div>
                   </div>
                 </div>
@@ -209,14 +338,18 @@ const CustomerArchitect = () => {
             ) : (
               <div className="no-results">
                 <i className="fas fa-search"></i>
-                <p>No architects found matching your criteria.</p>
+                <p>
+                  {viewFilter === "hired" || viewFilter === "hired_favorites"
+                    ? "No previously hired architects found."
+                    : "No architects found matching your criteria."}
+                </p>
               </div>
             )}
           </div>
         ) : (
           <>
             <div className="architect-list-section">
-              {filteredArchitects.map((architect) => (
+              {displayedArchitects.map((architect) => (
                 <div
                   key={architect._id}
                   className={`architect-card-compact ${
@@ -224,6 +357,20 @@ const CustomerArchitect = () => {
                   }`}
                   onClick={() => handleCardClick(architect._id)}
                 >
+                  <button
+                    type="button"
+                    className={`favorite-star-btn favorite-star-btn-compact ${favoriteArchitectIds.includes(architect._id) ? "active" : ""}`}
+                    onClick={(event) =>
+                      handleToggleFavorite(event, architect._id)
+                    }
+                    aria-label={
+                      favoriteArchitectIds.includes(architect._id)
+                        ? "Remove from favorites"
+                        : "Add to favorites"
+                    }
+                  >
+                    <i className="fas fa-star"></i>
+                  </button>
                   <img
                     src={
                       architect.profileImage ||

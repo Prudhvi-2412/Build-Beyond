@@ -251,6 +251,7 @@ body {
 }
 
 .card-header {
+  position: relative;
   padding: 1.75rem;
   background: linear-gradient(
     to bottom,
@@ -258,6 +259,40 @@ body {
     var(--bg-primary)
   );
   border-bottom: 1px solid var(--border-light);
+}
+
+.favorite-star-btn {
+  position: absolute;
+  top: 0.95rem;
+  right: 0.95rem;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #fbbf24;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  z-index: 2;
+}
+
+.favorite-star-btn i {
+  font-size: 0.9rem;
+}
+
+.favorite-star-btn:hover {
+  color: #f59e0b;
+  transform: scale(1.05);
+  box-shadow: var(--shadow-sm);
+}
+
+.favorite-star-btn.active {
+  color: #f59e0b;
+  background: #fff7e1;
+  border-color: #f59e0b;
 }
 
 .company-name {
@@ -301,6 +336,16 @@ body {
 
 .stat-pill:hover i {
   color: white;
+}
+
+.stat-pill-history {
+  background: #fff7e6;
+  border-color: #f59e0b;
+  color: #7c2d12;
+}
+
+.stat-pill-history i {
+  color: #d97706;
 }
 
 .card-body {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import "./CustomerJobStatus.css";
 import ReviewModal from "../../../../components/ReviewModal/ReviewModal";
 import ReviewDisplay from "../../../../components/ReviewDisplay/ReviewDisplay";
@@ -9,6 +9,7 @@ import { useGlobalChat } from "../../../../context/GlobalChatContext";
 
 const CustomerJobStatus = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { openChat } = useGlobalChat();
   const [activeTab, setActiveTab] = useState("cjs-architect-section");
   const [statusFilters, setStatusFilters] = useState({
@@ -110,6 +111,88 @@ const CustomerJobStatus = () => {
   useEffect(() => {
     fetchJobStatus();
   }, []);
+
+  useEffect(() => {
+    const projectId = searchParams.get("projectId");
+    if (
+      !projectId ||
+      Object.keys(applications).every((key) => applications[key].length === 0)
+    ) {
+      return;
+    }
+
+    const tabMap = {
+      "cjs-architect-section": "cjs-architect-section",
+      architect: "cjs-architect-section",
+      "cjs-interior-section": "cjs-interior-section",
+      interior: "cjs-interior-section",
+      "cjs-company-section": "cjs-company-section",
+      company: "cjs-company-section",
+    };
+
+    const targetTab = tabMap[searchParams.get("tab") || ""];
+    if (targetTab) {
+      setActiveTab(targetTab);
+    }
+
+    const targetSection = searchParams.get("section") || "card";
+
+    const foundType = ["architect", "interior", "company"].find((type) =>
+      applications[type].some((app) => String(app._id) === String(projectId)),
+    );
+
+    if (!foundType) {
+      return;
+    }
+
+    const tabByType = {
+      architect: "cjs-architect-section",
+      interior: "cjs-interior-section",
+      company: "cjs-company-section",
+    };
+
+    setActiveTab(tabByType[foundType]);
+    setExpandedSections((prev) => ({
+      ...prev,
+      [`${projectId}-card`]: true,
+      ...(targetSection ? { [`${projectId}-${targetSection}`]: true } : {}),
+    }));
+
+    const scrollTimer = window.setTimeout(() => {
+      document.getElementById(`cjs-${projectId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 100);
+
+    const highlightSection = [
+      "card",
+      "details",
+      "milestones",
+      "updates",
+    ].includes(targetSection)
+      ? targetSection
+      : "card";
+
+    const highlightTimer = window.setTimeout(() => {
+      const sectionTargetId = `cjs-${projectId}-${highlightSection}`;
+      const targetElement =
+        document.getElementById(sectionTargetId) ||
+        document.getElementById(`cjs-${projectId}`);
+
+      if (!targetElement) return;
+
+      targetElement.classList.add("cjs-notification-highlight");
+      window.setTimeout(() => {
+        targetElement.classList.remove("cjs-notification-highlight");
+      }, 3500);
+    }, 200);
+
+    return () => {
+      window.clearTimeout(scrollTimer);
+      window.clearTimeout(highlightTimer);
+    };
+  }, [searchParams, applications]);
 
   const handleTabClick = (tabId) => setActiveTab(tabId);
 
@@ -470,7 +553,7 @@ const CustomerJobStatus = () => {
     );
 
     return (
-      <div className="cjs-milestones-section">
+      <div className="cjs-milestones-section" id={`cjs-${app._id}-milestones`}>
         <h4>Project Milestones</h4>
         <div className="cjs-milestones-grid">
           {sortedMilestones.map((milestone) => (
@@ -620,7 +703,7 @@ const CustomerJobStatus = () => {
     );
 
     return (
-      <div className="cjs-updates-section">
+      <div className="cjs-updates-section" id={`cjs-${app._id}-updates`}>
         <h4>Project Updates</h4>
         <div className="cjs-updates-list">
           {sortedUpdates.map((update, index) => (
@@ -1038,7 +1121,11 @@ const CustomerJobStatus = () => {
       app.assignedWorkerDetails?.name || app.worker?.name || "Worker";
 
     return (
-      <div key={app._id} className="cjs-application cjs-architect-app">
+      <div
+        key={app._id}
+        id={`cjs-${app._id}`}
+        className="cjs-application cjs-architect-app"
+      >
         <div className="cjs-status-container">
           <div className="cjs-status cjs-architect-status">{app.status}</div>
           {renderCardToggle(app._id, "Card Details")}
@@ -1105,7 +1192,10 @@ const CustomerJobStatus = () => {
             )}
 
             {isSectionExpanded(app._id, "details") && (
-              <div className="cjs-application-data-section">
+              <div
+                className="cjs-application-data-section"
+                id={`cjs-${app._id}-details`}
+              >
                 <div className="cjs-application-data">
                   <div className="cjs-section-title">Customer Details</div>
                   <p>
@@ -1254,7 +1344,11 @@ const CustomerJobStatus = () => {
       app.assignedWorkerDetails?.name || app.workerId?.name || "Worker";
 
     return (
-      <div key={app._id} className="cjs-application cjs-interior-app">
+      <div
+        key={app._id}
+        id={`cjs-${app._id}`}
+        className="cjs-application cjs-interior-app"
+      >
         <div className="cjs-status-container">
           <div className="cjs-status cjs-interior-status">{app.status}</div>
           {renderCardToggle(app._id, "Card Details")}
@@ -1319,7 +1413,10 @@ const CustomerJobStatus = () => {
             )}
 
             {isSectionExpanded(app._id, "details") && (
-              <>
+              <div
+                id={`cjs-${app._id}-details`}
+                className="cjs-details-section"
+              >
                 <div className="cjs-section-title">Room Details</div>
                 <p>
                   <strong>Type:</strong> {app.roomType}
@@ -1373,7 +1470,7 @@ const CustomerJobStatus = () => {
                     </div>
                   </div>
                 )}
-              </>
+              </div>
             )}
 
             {isSectionExpanded(app._id, "milestones") &&
@@ -1386,7 +1483,11 @@ const CustomerJobStatus = () => {
   };
 
   const renderCompanyApp = (app) => (
-    <div key={app._id} className="cjs-application cjs-company-app">
+    <div
+      key={app._id}
+      id={`cjs-${app._id}`}
+      className="cjs-application cjs-company-app"
+    >
       <div className="cjs-status-container">
         <div className="cjs-status cjs-company-status">{app.status}</div>
         {renderCardToggle(app._id, "Card Details")}
@@ -1429,7 +1530,7 @@ const CustomerJobStatus = () => {
       </div>
 
       {isSectionExpanded(app._id, "card") && (
-        <>
+        <div id={`cjs-${app._id}-details`} className="cjs-details-section">
           {renderHireDetails(app, "company", "cjs-hire-details-inline")}
 
           {renderEditAction(app, "company")}
@@ -1467,7 +1568,7 @@ const CustomerJobStatus = () => {
           >
             View Details
           </button>
-        </>
+        </div>
       )}
     </div>
   );

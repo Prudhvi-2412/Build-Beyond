@@ -1,15 +1,20 @@
 // src/Pages/customer/components/customer-payments/CustomerPaymentHistory.jsx
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import CustomerPageLoader from "../common/CustomerPageLoader";
 import "./CustomerPaymentHistory.css";
 
 const CustomerPaymentHistory = () => {
+  const [searchParams] = useSearchParams();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all"); // all, deposit, milestone, refund
+  const [filter, setFilter] = useState("all"); // all, architect, interior, company
   const [stats, setStats] = useState({
     totalPaid: 0,
+    totalRefunded: 0,
+    netPaid: 0,
     totalProjects: 0,
     pendingPayments: 0,
   });
@@ -17,6 +22,33 @@ const CustomerPaymentHistory = () => {
   useEffect(() => {
     fetchPaymentHistory();
   }, []);
+
+  useEffect(() => {
+    const transactionId = searchParams.get("transactionId");
+    if (!transactionId || payments.length === 0) return;
+
+    const scrollTimer = window.setTimeout(() => {
+      document.getElementById(`coph-${transactionId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 100);
+
+    const highlightTimer = window.setTimeout(() => {
+      const targetElement = document.getElementById(`coph-${transactionId}`);
+      if (!targetElement) return;
+
+      targetElement.classList.add("coph-notification-highlight");
+      window.setTimeout(() => {
+        targetElement.classList.remove("coph-notification-highlight");
+      }, 3500);
+    }, 200);
+
+    return () => {
+      window.clearTimeout(scrollTimer);
+      window.clearTimeout(highlightTimer);
+    };
+  }, [searchParams, payments]);
 
   const fetchPaymentHistory = async () => {
     try {
@@ -74,6 +106,13 @@ const CustomerPaymentHistory = () => {
     }
   };
 
+  const getTypeBadgeClass = (hiredType) => {
+    if (hiredType === "architect") return "coph-type-architect";
+    if (hiredType === "interior") return "coph-type-interior";
+    if (hiredType === "company") return "coph-type-company";
+    return "coph-type-other";
+  };
+
   const getStatusBadge = (status) => {
     const statusMap = {
       completed: { label: "Completed", className: "coph-status-completed" },
@@ -103,24 +142,37 @@ const CustomerPaymentHistory = () => {
 
   const getFilteredPayments = () => {
     if (filter === "all") return payments;
-
-    if (filter === "deposit") {
-      return payments.filter(
-        (p) =>
-          p.transactionType === "escrow_hold" && p.metadata?.milestone === 1,
-      );
-    }
-
-    if (filter === "milestone") {
-      return payments.filter(
-        (p) => p.transactionType === "escrow_hold" && p.metadata?.milestone > 1,
-      );
-    }
-
-    return payments.filter((p) => p.transactionType === filter);
+    return payments.filter((p) => p.hiredType === filter);
   };
 
   const filteredPayments = getFilteredPayments();
+
+  const groupedPayments = filteredPayments.reduce((acc, payment) => {
+    const key = payment.hiredType || "other";
+    if (!acc[key]) {
+      acc[key] = {
+        label: payment.hiredTypeLabel || "Other",
+        items: [],
+      };
+    }
+    acc[key].items.push(payment);
+    return acc;
+  }, {});
+
+  const groupOrder = ["architect", "interior", "company", "other"];
+
+  const getProjectRoute = (payment) => {
+    if (!payment?.projectId) return null;
+
+    if (payment.hiredType === "architect" || payment.hiredType === "interior") {
+      const tab = payment.hiredType;
+      const section = payment?.milestonePercentage ? "milestones" : "details";
+      return `/customerdashboard/job_status?projectId=${payment.projectId}&tab=${tab}&section=${section}`;
+    }
+
+    const section = payment?.milestonePercentage ? "milestones" : "details";
+    return `/customerdashboard/ongoing_projects?projectId=${payment.projectId}&section=${section}`;
+  };
 
   if (loading) {
     return <CustomerPageLoader message="Loading payment history..." />;
@@ -193,25 +245,25 @@ const CustomerPaymentHistory = () => {
           className={`coph-filter-btn ${filter === "all" ? "active" : ""}`}
           onClick={() => setFilter("all")}
         >
-          All Payments
+          All Types
         </button>
         <button
-          className={`coph-filter-btn ${filter === "deposit" ? "active" : ""}`}
-          onClick={() => setFilter("deposit")}
+          className={`coph-filter-btn ${filter === "architect" ? "active" : ""}`}
+          onClick={() => setFilter("architect")}
         >
-          Deposits
+          Architect
         </button>
         <button
-          className={`coph-filter-btn ${filter === "milestone" ? "active" : ""}`}
-          onClick={() => setFilter("milestone")}
+          className={`coph-filter-btn ${filter === "interior" ? "active" : ""}`}
+          onClick={() => setFilter("interior")}
         >
-          Milestones
+          Interior Designer
         </button>
         <button
-          className={`coph-filter-btn ${filter === "refund" ? "active" : ""}`}
-          onClick={() => setFilter("refund")}
+          className={`coph-filter-btn ${filter === "company" ? "active" : ""}`}
+          onClick={() => setFilter("company")}
         >
-          Refunds
+          Companies
         </button>
       </div>
 
@@ -227,51 +279,112 @@ const CustomerPaymentHistory = () => {
           </div>
         ) : (
           <div className="coph-payments-list">
-            {filteredPayments.map((payment) => (
-              <div key={payment._id} className="coph-payment-card">
-                <div className="coph-payment-icon">
-                  {getTransactionIcon(payment.transactionType)}
-                </div>
+            {groupOrder
+              .filter((groupKey) => groupedPayments[groupKey]?.items?.length)
+              .map((groupKey) => {
+                const section = groupedPayments[groupKey];
+                const sectionTotal = section.items.reduce(
+                  (sum, item) => sum + Number(item.amount || 0),
+                  0,
+                );
 
-                <div className="coph-payment-details">
-                  <div className="coph-payment-main">
-                    <h3>{payment.description}</h3>
-                    {getStatusBadge(payment.status)}
-                  </div>
-
-                  <div className="coph-payment-meta">
-                    <span className="coph-payment-date">
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                      >
-                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
-                      </svg>
-                      {formatDate(payment.createdAt)}
-                    </span>
-
-                    {payment.milestonePercentage && (
-                      <span className="coph-milestone-badge">
-                        Milestone {payment.milestonePercentage}%
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="coph-payment-amount">
-                  <div className="coph-amount-main">
-                    ₹{payment.amount.toLocaleString()}
-                  </div>
-                  {payment.platformFee > 0 && (
-                    <div className="coph-amount-fee">
-                      Platform fee: ₹{payment.platformFee.toLocaleString()}
+                return (
+                  <section key={groupKey} className="coph-type-section">
+                    <div className="coph-type-header">
+                      <div>
+                        <h3>{section.label}</h3>
+                        <p>{section.items.length} payment records</p>
+                      </div>
+                      <strong>₹{sectionTotal.toLocaleString()}</strong>
                     </div>
-                  )}
-                </div>
-              </div>
-            ))}
+
+                    {section.items.map((payment) => (
+                      <div
+                        key={payment._id}
+                        id={`coph-${payment._id}`}
+                        className="coph-payment-card"
+                      >
+                        <div className="coph-payment-icon">
+                          {getTransactionIcon(payment.transactionType)}
+                        </div>
+
+                        <div className="coph-payment-details">
+                          <div className="coph-payment-main">
+                            <div>
+                              <h3>
+                                {getProjectRoute(payment) ? (
+                                  <Link
+                                    to={getProjectRoute(payment)}
+                                    className="coph-project-link"
+                                  >
+                                    {payment.projectName || payment.description}
+                                  </Link>
+                                ) : (
+                                  payment.projectName || payment.description
+                                )}
+                              </h3>
+                              <p className="coph-purpose-text">
+                                Paid for: {payment.paymentPurpose || "Payment"}
+                              </p>
+                            </div>
+                            <div className="coph-main-badges">
+                              <span
+                                className={`coph-type-badge ${getTypeBadgeClass(payment.hiredType)}`}
+                              >
+                                {payment.hiredTypeLabel || "Other"}
+                              </span>
+                              {getStatusBadge(payment.status)}
+                            </div>
+                          </div>
+
+                          <div className="coph-payment-meta">
+                            <span className="coph-payment-date">
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                              >
+                                <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
+                              </svg>
+                              {formatDate(payment.createdAt)}
+                            </span>
+
+                            {payment.providerName && (
+                              <span className="coph-milestone-badge">
+                                Provider: {payment.providerName}
+                              </span>
+                            )}
+
+                            {payment.milestonePercentage && (
+                              <span className="coph-milestone-badge">
+                                Milestone {payment.milestonePercentage}%
+                              </span>
+                            )}
+
+                            <span className="coph-milestone-badge">
+                              Method:{" "}
+                              {(payment.paymentMethod || "").toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="coph-payment-amount">
+                          <div className="coph-amount-main">
+                            ₹{Number(payment.amount || 0).toLocaleString()}
+                          </div>
+                          {Number(payment.platformFee || 0) > 0 && (
+                            <div className="coph-amount-fee">
+                              Platform fee: ₹
+                              {Number(payment.platformFee).toLocaleString()}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </section>
+                );
+              })}
           </div>
         )}
       </div>

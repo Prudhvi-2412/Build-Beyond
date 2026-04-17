@@ -5,6 +5,15 @@ import { useNavigate } from "react-router-dom";
 import { useValidation } from "../../../../context/ValidationContext";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchCustomerProfile } from "../../../../store/slices/customerProfileSlice";
+import {
+  clearDraft,
+  clearClipboard,
+  readClipboard,
+  readDraft,
+  saveDraft,
+  writeClipboard,
+} from "./formDraftStorage";
+import "./formDraftControls.css";
 
 const MAX_FLOOR_FILES = 5;
 const ALLOWED_FILE_TYPES = ["application/pdf", "image/jpeg", "image/png"];
@@ -32,6 +41,12 @@ const BidForm = () => {
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState("");
+  const draftScope = "default";
+  const clipboardKey = "bid-form";
+  const [copiedForm, setCopiedForm] = useState(() =>
+    readClipboard(clipboardKey),
+  );
 
   // Base form state for static fields used elsewhere in component
   const [formData, setFormData] = useState({
@@ -143,6 +158,176 @@ const BidForm = () => {
     };
     reader.readAsDataURL(file);
   };
+
+  const restoreDraft = () => {
+    const draft = readDraft("bid-form", draftScope);
+    if (!draft?.data) return;
+
+    const values = draft.data.values || {};
+    setFormData((prev) => ({
+      ...prev,
+      projectName: values.projectName || prev.projectName,
+      customerName: values.customerName || prev.customerName,
+      customerEmail: values.customerEmail || prev.customerEmail,
+      customerPhone: values.customerPhone || prev.customerPhone,
+      projectLocation: values.projectLocation || prev.projectLocation,
+      projectAddress: values.projectAddress || prev.projectAddress,
+      estimatedBudget: values.estimatedBudget || prev.estimatedBudget,
+    }));
+    setTotalFloors(values.totalFloors || "");
+    setFloors(Array.isArray(draft.data.floors) ? draft.data.floors : []);
+
+    const domValues = {
+      projectName: values.projectName,
+      buildingType: values.buildingType,
+      projectAddress: values.projectAddress,
+      projectLocation: values.projectLocation,
+      totalArea: values.totalArea,
+      estimatedBudget: values.estimatedBudget,
+      projectTimeline: values.projectTimeline,
+      specialRequirements: values.specialRequirements,
+      accessibilityNeeds: values.accessibilityNeeds,
+      energyEfficiency: values.energyEfficiency,
+    };
+
+    Object.entries(domValues).forEach(([id, value]) => {
+      const element = document.getElementById(id);
+      if (element && value !== undefined && value !== null) {
+        element.value = value;
+      }
+    });
+
+    setDraftSavedAt(draft.savedAt || "");
+  };
+
+  const copyCurrentForm = () => {
+    writeClipboard(
+      clipboardKey,
+      {
+        values: {
+          projectName: document.getElementById("projectName")?.value || "",
+          buildingType: document.getElementById("buildingType")?.value || "",
+          customerName: formData.customerName,
+          customerEmail: formData.customerEmail,
+          customerPhone: formData.customerPhone,
+          projectAddress:
+            document.getElementById("projectAddress")?.value || "",
+          projectLocation:
+            document.getElementById("projectLocation")?.value || "",
+          totalArea: document.getElementById("totalArea")?.value || "",
+          estimatedBudget:
+            document.getElementById("estimatedBudget")?.value || "",
+          projectTimeline:
+            document.getElementById("projectTimeline")?.value || "",
+          totalFloors,
+          specialRequirements:
+            document.getElementById("specialRequirements")?.value || "",
+          accessibilityNeeds:
+            document.getElementById("accessibilityNeeds")?.value || "",
+          energyEfficiency:
+            document.getElementById("energyEfficiency")?.value || "",
+        },
+        floors: floors.map(({ floorImage, preview, ...rest }) => rest),
+      },
+      document.getElementById("projectName")?.value || "Bid request",
+    );
+    setCopiedForm(readClipboard(clipboardKey));
+  };
+
+  const pasteCopiedForm = () => {
+    if (!copiedForm?.data) return;
+
+    const values = copiedForm.data.values || {};
+    setFormData((prev) => ({
+      ...prev,
+      projectName: values.projectName || prev.projectName,
+      customerName: values.customerName || prev.customerName,
+      customerEmail: values.customerEmail || prev.customerEmail,
+      customerPhone: values.customerPhone || prev.customerPhone,
+      projectLocation: values.projectLocation || prev.projectLocation,
+      projectAddress: values.projectAddress || prev.projectAddress,
+      estimatedBudget: values.estimatedBudget || prev.estimatedBudget,
+    }));
+    setTotalFloors(values.totalFloors || "");
+    setFloors(
+      Array.isArray(copiedForm.data.floors) ? copiedForm.data.floors : [],
+    );
+
+    const domValues = {
+      projectName: values.projectName,
+      buildingType: values.buildingType,
+      projectAddress: values.projectAddress,
+      projectLocation: values.projectLocation,
+      totalArea: values.totalArea,
+      estimatedBudget: values.estimatedBudget,
+      projectTimeline: values.projectTimeline,
+      specialRequirements: values.specialRequirements,
+      accessibilityNeeds: values.accessibilityNeeds,
+      energyEfficiency: values.energyEfficiency,
+    };
+
+    Object.entries(domValues).forEach(([id, value]) => {
+      const element = document.getElementById(id);
+      if (element && value !== undefined && value !== null) {
+        element.value = value;
+      }
+    });
+
+    setDraftSavedAt("");
+  };
+
+  const handleClipboardAction = () => {
+    if (copiedForm?.data) {
+      pasteCopiedForm();
+      return;
+    }
+
+    copyCurrentForm();
+  };
+
+  const clearCopiedForm = () => {
+    clearClipboard(clipboardKey);
+    setCopiedForm(null);
+  };
+
+  const saveCurrentDraft = () => {
+    const savedAt = saveDraft("bid-form", draftScope, {
+      values: {
+        projectName: document.getElementById("projectName")?.value || "",
+        buildingType: document.getElementById("buildingType")?.value || "",
+        customerName: formData.customerName,
+        customerEmail: formData.customerEmail,
+        customerPhone: formData.customerPhone,
+        projectAddress: document.getElementById("projectAddress")?.value || "",
+        projectLocation:
+          document.getElementById("projectLocation")?.value || "",
+        totalArea: document.getElementById("totalArea")?.value || "",
+        estimatedBudget:
+          document.getElementById("estimatedBudget")?.value || "",
+        projectTimeline:
+          document.getElementById("projectTimeline")?.value || "",
+        totalFloors,
+        specialRequirements:
+          document.getElementById("specialRequirements")?.value || "",
+        accessibilityNeeds:
+          document.getElementById("accessibilityNeeds")?.value || "",
+        energyEfficiency:
+          document.getElementById("energyEfficiency")?.value || "",
+      },
+      floors,
+    });
+    setDraftSavedAt(savedAt);
+  };
+
+  const clearCurrentDraft = () => {
+    clearDraft("bid-form", draftScope);
+    setDraftSavedAt("");
+  };
+
+  useEffect(() => {
+    restoreDraft();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const validate = () => {
     const newErrors = {};
@@ -349,6 +534,7 @@ const BidForm = () => {
 
       if (response.data && response.data.success) {
         alert("Bid submitted successfully!");
+        clearCurrentDraft();
         navigate(-1);
       } else {
         setFormError(
@@ -369,6 +555,65 @@ const BidForm = () => {
     <div className="bf-container">
       <div className="bf-title-block">
         <h1>Bid Form</h1>
+      </div>
+
+      <div className="customer-form-draft-bar">
+        <div className="customer-form-draft-copy">
+          <div className="customer-form-draft-title">Drafts</div>
+          <div className="customer-form-draft-note">
+            Save this form locally and restore it later on this device.
+          </div>
+          {copiedForm?.data && (
+            <div className="customer-form-draft-clipboard">
+              Copied form ready to paste into another bid request.
+            </div>
+          )}
+          {draftSavedAt && (
+            <div className="customer-form-draft-savedAt">
+              Last saved {new Date(draftSavedAt).toLocaleString()}
+            </div>
+          )}
+        </div>
+        <div className="customer-form-draft-actions">
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-secondary"
+            onClick={restoreDraft}
+          >
+            Restore Draft
+          </button>
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-primary"
+            onClick={saveCurrentDraft}
+          >
+            Save Draft
+          </button>
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-clipboard"
+            onClick={handleClipboardAction}
+          >
+            {copiedForm?.data ? "Paste Copied Form" : "Copy Form"}
+          </button>
+          {copiedForm?.data && (
+            <button
+              type="button"
+              className="customer-form-draft-button customer-form-draft-button-secondary"
+              onClick={clearCopiedForm}
+            >
+              Clear Copied Form
+            </button>
+          )}
+          <button
+            type="button"
+            className="customer-form-draft-button customer-form-draft-button-secondary"
+            onClick={clearCurrentDraft}
+            disabled={!draftSavedAt}
+          >
+            Clear Draft
+          </button>
+        </div>
       </div>
 
       <form

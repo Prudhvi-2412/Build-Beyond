@@ -2,6 +2,10 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import CustomerPageLoader from "../common/CustomerPageLoader";
+import {
+  readFavoritesByType,
+  toggleFavoriteByType,
+} from "../common/serviceFavoritesStorage";
 import "./CustomerInterior.css";
 
 const CustomerInterior = () => {
@@ -10,19 +14,73 @@ const CustomerInterior = () => {
   const [selectedDesignerId, setSelectedDesignerId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterSpecialty, setFilterSpecialty] = useState("all");
+  const [viewFilter, setViewFilter] = useState("all");
+  const [favoriteDesignerIds, setFavoriteDesignerIds] = useState(() =>
+    readFavoritesByType("interior"),
+  );
+  const [hiredDesignerIds, setHiredDesignerIds] = useState([]);
+  const [designerProjectStats, setDesignerProjectStats] = useState({});
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   useEffect(() => {
-    axios
-      .get("/api/interior_designer")
-      .then((response) => {
-        setDesigners(response.data.designers || []);
-      })
-      .catch((error) => {
-        console.error("Error fetching designers:", error);
-      })
-      .finally(() => setLoading(false));
+    const loadDesignerData = async () => {
+      try {
+        const [designerRes, statusRes] = await Promise.allSettled([
+          axios.get("/api/interior_designer"),
+          axios.get("/api/job_status", { withCredentials: true }),
+        ]);
+
+        if (designerRes.status === "fulfilled") {
+          setDesigners(designerRes.value.data.designers || []);
+        } else {
+          console.error("Error fetching designers:", designerRes.reason);
+        }
+
+        if (statusRes.status === "fulfilled") {
+          const applications = statusRes.value.data?.interiorApplications || [];
+          const hiredIds = new Set();
+          const statsByDesigner = {};
+
+          applications.forEach((app) => {
+            const workerIdRaw =
+              app.workerId?._id ||
+              app.worker?._id ||
+              app.workerId ||
+              app.worker;
+            const workerId = workerIdRaw ? String(workerIdRaw) : "";
+            if (!workerId) return;
+
+            const status = (app.status || "").toLowerCase();
+            const isHired = [
+              "accepted",
+              "completed",
+              "pending payment",
+              "pending_payment",
+            ].includes(status);
+            if (!isHired) return;
+
+            hiredIds.add(workerId);
+            if (!statsByDesigner[workerId]) {
+              statsByDesigner[workerId] = { active: 0, finished: 0 };
+            }
+
+            if (status === "completed") {
+              statsByDesigner[workerId].finished += 1;
+            } else {
+              statsByDesigner[workerId].active += 1;
+            }
+          });
+
+          setHiredDesignerIds(Array.from(hiredIds));
+          setDesignerProjectStats(statsByDesigner);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDesignerData();
   }, []);
 
   const specialties = [
@@ -44,8 +102,33 @@ const CustomerInterior = () => {
           (s) => s.toLowerCase() === filterSpecialty.toLowerCase(),
         ));
 
-    return matchesSearch && matchesSpecialty;
+    const ratingMode = viewFilter === "rating";
+    const favoriteOnly =
+      !ratingMode &&
+      (viewFilter === "favorites" || viewFilter === "hired_favorites");
+    const hiredOnly =
+      !ratingMode &&
+      (viewFilter === "hired" || viewFilter === "hired_favorites");
+
+    const matchesFavorite =
+      !favoriteOnly || favoriteDesignerIds.includes(designer._id);
+
+    const matchesHired = !hiredOnly || hiredDesignerIds.includes(designer._id);
+
+    return matchesSearch && matchesSpecialty && matchesFavorite && matchesHired;
   });
+
+  const displayedDesigners =
+    viewFilter === "rating"
+      ? [...filteredDesigners].sort(
+          (a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0),
+        )
+      : filteredDesigners;
+
+  const handleToggleFavorite = (event, designerId) => {
+    event.stopPropagation();
+    setFavoriteDesignerIds(toggleFavoriteByType("interior", designerId));
+  };
 
   const handleCardClick = (id) => {
     setSelectedDesignerId(id);
@@ -124,10 +207,27 @@ const CustomerInterior = () => {
                 ))}
             </select>
           </div>
+          <div className="filter-box">
+            <label htmlFor="view-filter">
+              <i className="fas fa-sliders-h"></i>
+              Filter:
+            </label>
+            <select
+              id="view-filter"
+              value={viewFilter}
+              onChange={(e) => setViewFilter(e.target.value)}
+            >
+              <option value="all">All</option>
+              <option value="favorites">Favorites Only</option>
+              <option value="hired">Previously Hired</option>
+              <option value="hired_favorites">Hired + Favorites</option>
+              <option value="rating">Rating</option>
+            </select>
+          </div>
           <div className="results-count">
-            <span className="count-number">{filteredDesigners.length}</span>
+            <span className="count-number">{displayedDesigners.length}</span>
             <span className="count-label">
-              {filteredDesigners.length === 1 ? "Designer" : "Designers"}
+              {displayedDesigners.length === 1 ? "Designer" : "Designers"}
             </span>
           </div>
         </div>
@@ -138,8 +238,8 @@ const CustomerInterior = () => {
       >
         {!selectedDesignerId ? (
           <div className="designers-grid">
-            {filteredDesigners.length > 0 ? (
-              filteredDesigners.map((designer) => (
+            {displayedDesigners.length > 0 ? (
+              displayedDesigners.map((designer) => (
                 <div key={designer._id} className="designer-wrapper">
                   <div
                     className={`designer-card ${
@@ -148,6 +248,20 @@ const CustomerInterior = () => {
                     onClick={() => handleCardClick(designer._id)}
                   >
                     <div className="designer-card-header">
+                      <button
+                        type="button"
+                        className={`favorite-star-btn ${favoriteDesignerIds.includes(designer._id) ? "active" : ""}`}
+                        onClick={(event) =>
+                          handleToggleFavorite(event, designer._id)
+                        }
+                        aria-label={
+                          favoriteDesignerIds.includes(designer._id)
+                            ? "Remove from favorites"
+                            : "Add to favorites"
+                        }
+                      >
+                        <i className="fas fa-star"></i>
+                      </button>
                       <img
                         src={
                           designer.profileImage ||
@@ -202,6 +316,20 @@ const CustomerInterior = () => {
                             )}
                           </div>
                         )}
+                      {(viewFilter === "hired" ||
+                        viewFilter === "hired_favorites") &&
+                        designerProjectStats[designer._id] && (
+                          <div className="provider-history-row">
+                            <span className="provider-history-pill">
+                              Active:{" "}
+                              {designerProjectStats[designer._id].active}
+                            </span>
+                            <span className="provider-history-pill">
+                              Finished:{" "}
+                              {designerProjectStats[designer._id].finished}
+                            </span>
+                          </div>
+                        )}
                     </div>
                   </div>
                 </div>
@@ -209,14 +337,18 @@ const CustomerInterior = () => {
             ) : (
               <div className="no-results">
                 <i className="fas fa-search"></i>
-                <p>No designers found matching your criteria.</p>
+                <p>
+                  {viewFilter === "hired" || viewFilter === "hired_favorites"
+                    ? "No previously hired designers found."
+                    : "No designers found matching your criteria."}
+                </p>
               </div>
             )}
           </div>
         ) : (
           <>
             <div className="designer-list-section">
-              {filteredDesigners.map((designer) => (
+              {displayedDesigners.map((designer) => (
                 <div
                   key={designer._id}
                   className={`designer-card-compact ${
@@ -224,6 +356,20 @@ const CustomerInterior = () => {
                   }`}
                   onClick={() => handleCardClick(designer._id)}
                 >
+                  <button
+                    type="button"
+                    className={`favorite-star-btn favorite-star-btn-compact ${favoriteDesignerIds.includes(designer._id) ? "active" : ""}`}
+                    onClick={(event) =>
+                      handleToggleFavorite(event, designer._id)
+                    }
+                    aria-label={
+                      favoriteDesignerIds.includes(designer._id)
+                        ? "Remove from favorites"
+                        : "Add to favorites"
+                    }
+                  >
+                    <i className="fas fa-star"></i>
+                  </button>
                   <img
                     src={
                       designer.profileImage ||
