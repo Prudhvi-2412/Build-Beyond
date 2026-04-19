@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AdminAuthProvider } from "../context/AdminAuthContext";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+
 const AdminProtectedRoute = ({ children, allowedRoles = ["platform_manager", "admin", "superadmin"] }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -11,7 +13,7 @@ const AdminProtectedRoute = ({ children, allowedRoles = ["platform_manager", "ad
   useEffect(() => {
     const checkAdminAuth = async () => {
       try {
-        const res = await fetch("/api/admin/verify-session", {
+        const res = await fetch(`${API_BASE}/api/admin/verify-session`, {
           credentials: "include",
           method: "GET",
         });

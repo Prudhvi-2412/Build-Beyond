@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+// Use VITE_API_BASE_URL in production so requests go directly to Render
+// (not via Vercel proxy which drops auth cookies)
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+
 const ProtectedRoute = ({ role, children }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -9,23 +13,26 @@ const ProtectedRoute = ({ role, children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await fetch("/api/session", { credentials: "include" });
+        const res = await fetch(`${API_BASE}/api/session`, {
+          credentials: "include",
+        });
         if (res.status === 404) {
           navigate("/not-found");
           return;
         }
         if (res.status === 401 || res.status === 403) {
-          navigate("/unauthorized");
+          // Redirect straight to login instead of showing /unauthorized flash
+          navigate("/");
           return;
         }
         const data = await res.json();
         if (data.authenticated && data.user.role === role) {
           setAuthenticated(true);
         } else {
-          navigate("/unauthorized");
+          navigate("/");
         }
       } catch {
-        navigate("/unauthorized");
+        navigate("/");
       } finally {
         setLoading(false);
       }
@@ -33,7 +40,7 @@ const ProtectedRoute = ({ role, children }) => {
     checkAuth();
   }, [role, navigate]);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return null; // silent loading — no flash
   return authenticated ? children : null;
 };
 
