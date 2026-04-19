@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   Clock,
   Compass,
-  Download,
   FileText,
   Home,
   Layers,
@@ -238,12 +237,6 @@ const ArchitectHiringDetail = () => {
             <p>Project ID: {hiring._id}</p>
           </div>
           <div className="customer360-header-actions">
-            <ActionButton
-              label="Export Project Details"
-              icon={Download}
-              variant="secondary"
-              onClick={() => window.print()}
-            />
             {customerRoute && (
               <ActionButton
                 label="View Customer"

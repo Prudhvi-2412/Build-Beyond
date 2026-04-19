@@ -95,32 +95,48 @@ const {
   setCacheJson,
   getRedisCacheStats,
   resetRedisCacheStats,
-} = require('../utils/redisCache');
+} = require("../utils/redisCache");
 
 const getAdminDashboard = async (req, res) => {
   try {
-    const customers = await Customer.find({}).sort({ createdAt: -1 });
-    const companies = await Company.find({}).sort({ createdAt: -1 });
-    const workers = await Worker.find({}).sort({ createdAt: -1 });
-    const architectHirings = await ArchitectHiring.find({})
-      .populate("customer", "name email")
-      .populate("worker", "name email")
-      .sort({ createdAt: -1 });
-    const constructionProjects = await ConstructionProjectSchema.find({})
-      .populate("customerId", "name email")
-      .populate("companyId", "companyName")
-      .sort({ createdAt: -1 });
-    const designRequests = await DesignRequest.find({})
-      .populate("customerId", "name email")
-      .populate("workerId", "name email")
-      .sort({ createdAt: -1 });
-    const bids = await Bid.find({})
-      .populate("customerId", "name email")
-      .sort({ createdAt: -1 });
-    const jobApplications = await WorkerToCompany.find({})
-      .populate("workerId", "name email")
-      .populate("companyId", "companyName")
-      .sort({ createdAt: -1 });
+    const [
+      customers,
+      companies,
+      workers,
+      architectHirings,
+      constructionProjects,
+      designRequests,
+      bids,
+      jobApplications,
+    ] = await Promise.all([
+      Customer.find({}).sort({ createdAt: -1 }).lean(),
+      Company.find({}).sort({ createdAt: -1 }).lean(),
+      Worker.find({}).sort({ createdAt: -1 }).lean(),
+      ArchitectHiring.find({})
+        .populate("customer", "name email")
+        .populate("worker", "name email")
+        .sort({ createdAt: -1 })
+        .lean(),
+      ConstructionProjectSchema.find({})
+        .populate("customerId", "name email")
+        .populate("companyId", "companyName")
+        .sort({ createdAt: -1 })
+        .lean(),
+      DesignRequest.find({})
+        .populate("customerId", "name email")
+        .populate("workerId", "name email")
+        .sort({ createdAt: -1 })
+        .lean(),
+      Bid.find({})
+        .populate("customerId", "name email")
+        .sort({ createdAt: -1 })
+        .lean(),
+      WorkerToCompany.find({})
+        .populate("workerId", "name email")
+        .populate("companyId", "companyName")
+        .sort({ createdAt: -1 })
+        .lean(),
+    ]);
 
     const customersCount = customers.length;
     const companiesCount = companies.length;
@@ -369,33 +385,30 @@ const deleteJobApplication = async (req, res) => {
 
 const getCustomerDetail = async (req, res) => {
   try {
-    const customer = await Customer.findById(req.params.id);
+    const customer = await Customer.findById(req.params.id).lean();
     if (!customer) {
       return res.status(404).json({ error: "Customer not found" });
     }
 
-    // Fetch all related projects and connections
-    const constructionProjects = await ConstructionProjectSchema.find({
-      customerId: req.params.id,
-    })
-      .populate("companyId", "companyName email contactPerson")
-      .sort({ createdAt: -1 });
-
-    const architectHirings = await ArchitectHiring.find({
-      customer: req.params.id,
-    })
-      .populate("worker", "name email specialization")
-      .sort({ createdAt: -1 });
-
-    const designRequests = await DesignRequest.find({
-      customerId: req.params.id,
-    })
-      .populate("workerId", "name email specialization")
-      .sort({ createdAt: -1 });
-
-    const bids = await Bid.find({ customerId: req.params.id })
-      .populate("companyBids.companyId", "companyName email")
-      .sort({ createdAt: -1 });
+    const [constructionProjects, architectHirings, designRequests, bids] =
+      await Promise.all([
+        ConstructionProjectSchema.find({ customerId: req.params.id })
+          .populate("companyId", "companyName email contactPerson")
+          .sort({ createdAt: -1 })
+          .lean(),
+        ArchitectHiring.find({ customer: req.params.id })
+          .populate("worker", "name email specialization")
+          .sort({ createdAt: -1 })
+          .lean(),
+        DesignRequest.find({ customerId: req.params.id })
+          .populate("workerId", "name email specialization")
+          .sort({ createdAt: -1 })
+          .lean(),
+        Bid.find({ customerId: req.params.id })
+          .populate("companyBids.companyId", "companyName email")
+          .sort({ createdAt: -1 })
+          .lean(),
+      ]);
 
     res.json({
       customer,
@@ -452,36 +465,54 @@ const getInteriorProgress = (request) => {
 const getCustomerFullDetail = async (req, res) => {
   try {
     const customerId = req.params.customerId;
-    const customer = await Customer.findById(customerId).lean();
+    const [
+      customer,
+      constructionProjects,
+      architectHirings,
+      designRequests,
+      bids,
+    ] = await Promise.all([
+      Customer.findById(customerId).lean(),
+      ConstructionProjectSchema.find({ customerId })
+        .populate("companyId", "companyName email contactPerson")
+        .sort({ createdAt: -1 })
+        .lean(),
+      ArchitectHiring.find({ customer: customerId })
+        .populate("worker", "name email specialization profileImage")
+        .sort({ createdAt: -1 })
+        .lean(),
+      DesignRequest.find({ customerId })
+        .populate("workerId", "name email specialization profileImage")
+        .sort({ createdAt: -1 })
+        .lean(),
+      Bid.find({ customerId })
+        .populate("companyBids.companyId", "companyName")
+        .sort({ createdAt: -1 })
+        .lean(),
+    ]);
+
     if (!customer) {
       return res
         .status(404)
         .json({ success: false, error: "Customer not found" });
     }
 
-    const [constructionProjects, architectHirings, designRequests, bids] =
-      await Promise.all([
-        ConstructionProjectSchema.find({ customerId })
-          .populate("companyId", "companyName email contactPerson")
-          .sort({ createdAt: -1 })
-          .lean(),
-        ArchitectHiring.find({ customer: customerId })
-          .populate("worker", "name email specialization profileImage")
-          .sort({ createdAt: -1 })
-          .lean(),
-        DesignRequest.find({ customerId })
-          .populate("workerId", "name email specialization profileImage")
-          .sort({ createdAt: -1 })
-          .lean(),
-        Bid.find({ customerId })
-          .populate("companyBids.companyId", "companyName")
-          .sort({ createdAt: -1 })
-          .lean(),
-      ]);
-
     const customerReviews = Array.isArray(customer.reviews)
       ? customer.reviews
       : [];
+
+    const reviewByProjectId = new Map();
+    const reviewByWorkerId = new Map();
+    customerReviews.forEach((review) => {
+      const projectKey = review?.projectId ? String(review.projectId) : null;
+      const workerKey = review?.workerId ? String(review.workerId) : null;
+      if (projectKey && !reviewByProjectId.has(projectKey)) {
+        reviewByProjectId.set(projectKey, review);
+      }
+      if (workerKey && !reviewByWorkerId.has(workerKey)) {
+        reviewByWorkerId.set(workerKey, review);
+      }
+    });
 
     const fromConstruction = constructionProjects.map((project) => ({
       _id: project._id,
@@ -509,11 +540,9 @@ const getCustomerFullDetail = async (req, res) => {
 
     const fromArchitect = architectHirings.map((hiring) => {
       const inlineReview = hiring.review?.customerToWorker || {};
-      const fallbackReview = customerReviews.find(
-        (review) =>
-          String(review.projectId || "") === String(hiring._id || "") ||
-          String(review.workerId || "") === String(hiring.worker?._id || ""),
-      );
+      const fallbackReview =
+        reviewByProjectId.get(String(hiring._id || "")) ||
+        reviewByWorkerId.get(String(hiring.worker?._id || ""));
 
       return {
         _id: hiring._id,
@@ -537,17 +566,16 @@ const getCustomerFullDetail = async (req, res) => {
           inlineReview.submittedAt || fallbackReview?.reviewedAt || null,
         rating: inlineReview.rating || fallbackReview?.rating || null,
         reviewComment: inlineReview.comment || fallbackReview?.comment || "",
+        avatar: hiring.worker?.profileImage || "",
         routePath: `/architect-hiring/${hiring._id}`,
       };
     });
 
     const fromInterior = designRequests.map((request) => {
       const inlineReview = request.review?.customerToWorker || {};
-      const fallbackReview = customerReviews.find(
-        (review) =>
-          String(review.projectId || "") === String(request._id || "") ||
-          String(review.workerId || "") === String(request.workerId?._id || ""),
-      );
+      const fallbackReview =
+        reviewByProjectId.get(String(request._id || "")) ||
+        reviewByWorkerId.get(String(request.workerId?._id || ""));
 
       return {
         _id: request._id,
@@ -572,6 +600,7 @@ const getCustomerFullDetail = async (req, res) => {
           inlineReview.submittedAt || fallbackReview?.reviewedAt || null,
         rating: inlineReview.rating || fallbackReview?.rating || null,
         reviewComment: inlineReview.comment || fallbackReview?.comment || "",
+        avatar: request.workerId?.profileImage || "",
         routePath: `/design-request/${request._id}`,
       };
     });
@@ -637,10 +666,7 @@ const getCustomerFullDetail = async (req, res) => {
         .map((project) => ({
           professionalId: project.partnerId,
           professionalName: project.partnerName,
-          avatar:
-            architectHirings.find(
-              (item) => String(item._id) === String(project._id),
-            )?.worker?.profileImage || "",
+          avatar: project.avatar || "",
           specialization: "Architect",
           projectName: project.projectName,
           fixedAmount: project.amount,
@@ -654,10 +680,7 @@ const getCustomerFullDetail = async (req, res) => {
         .map((project) => ({
           professionalId: project.partnerId,
           professionalName: project.partnerName,
-          avatar:
-            designRequests.find(
-              (item) => String(item._id) === String(project._id),
-            )?.workerId?.profileImage || "",
+          avatar: project.avatar || "",
           specialization: "Interior Designer",
           projectName: project.projectName,
           fixedAmount: project.amount,
@@ -828,50 +851,45 @@ const getCompanyDetail = async (req, res) => {
 const getCompanyFullDetail = async (req, res) => {
   try {
     const companyId = req.params.companyId;
-    const company = await Company.findById(companyId).lean();
+    const [company, constructionProjects, bids, jobPostings, jobApplications] =
+      await Promise.all([
+        Company.findById(companyId).lean(),
+        ConstructionProjectSchema.find({ companyId })
+          .select(
+            "projectName customerId customerName status proposal.price paymentDetails.totalAmount paymentDetails.platformFee paymentDetails.payouts completionPercentage currentPhase createdAt targetCompletionDate specialRequirements mainImagePath completionImages projectAddress updatedAt customerReview",
+          )
+          .populate("customerId", "name email phone")
+          .sort({ createdAt: -1 })
+          .lean(),
+        Bid.find({ "companyBids.companyId": companyId })
+          .select(
+            "projectName customerId customerName companyBids winningBidId status totalArea createdAt updatedAt paymentDetails.platformFee paymentDetails.payouts",
+          )
+          .populate("customerId", "name email phone")
+          .sort({ createdAt: -1 })
+          .lean(),
+        CompanytoWorker.find({ company: companyId })
+          .select("position location salary status worker createdAt")
+          .populate(
+            "worker",
+            "name email phone specialization experience status",
+          )
+          .sort({ _id: -1 })
+          .lean(),
+        WorkerToCompany.find({ companyId })
+          .select(
+            "fullName workerId positionApplying experience expectedSalary status createdAt",
+          )
+          .populate("workerId", "name email phone specialization experience")
+          .sort({ createdAt: -1 })
+          .lean(),
+      ]);
 
     if (!company) {
       return res
         .status(404)
         .json({ success: false, error: "Company not found" });
     }
-
-    const [constructionProjects, bids, jobPostings, jobApplications] =
-      await Promise.all([
-        ConstructionProjectSchema.find({ companyId })
-          .populate("customerId", "name email phone")
-          .sort({ createdAt: -1 })
-          .lean(),
-        Bid.find({ "companyBids.companyId": companyId })
-          .populate("customerId", "name email phone")
-          .sort({ createdAt: -1 })
-          .lean(),
-        CompanytoWorker.find({ company: companyId })
-          .populate("worker", "name email phone specialization")
-          .sort({ _id: -1 })
-          .lean(),
-        WorkerToCompany.find({ companyId })
-          .populate("workerId", "name email phone specialization experience")
-          .sort({ createdAt: -1 })
-          .lean(),
-      ]);
-
-    const workerIdsFromOffers = jobPostings
-      .map((posting) => posting.worker?._id || posting.worker)
-      .filter(Boolean)
-      .map((workerId) => String(workerId));
-
-    const uniqueWorkerIds = [...new Set(workerIdsFromOffers)];
-
-    const offerWorkers = uniqueWorkerIds.length
-      ? await Worker.find({ _id: { $in: uniqueWorkerIds } })
-          .select("name email phone specialization experience status")
-          .lean()
-      : [];
-
-    const offerWorkerMap = new Map(
-      offerWorkers.map((worker) => [String(worker._id), worker]),
-    );
 
     const activeConstructionProjects = constructionProjects
       .filter((project) => {
@@ -978,7 +996,7 @@ const getCompanyFullDetail = async (req, res) => {
     const jobPostingsCreated = jobPostings.map((posting) => {
       const populatedWorkerId = posting.worker?._id || posting.worker;
       const workerId = populatedWorkerId ? String(populatedWorkerId) : null;
-      const fetchedWorker = workerId ? offerWorkerMap.get(workerId) : null;
+      const workerProfile = posting.worker || null;
 
       return {
         _id: posting._id,
@@ -988,15 +1006,12 @@ const getCompanyFullDetail = async (req, res) => {
         status: posting.status || "Pending",
         postedOn: posting.createdAt || posting._id?.getTimestamp?.() || null,
         workerId,
-        workerName: fetchedWorker?.name || posting.worker?.name || "—",
-        workerEmail: fetchedWorker?.email || posting.worker?.email || "—",
-        workerPhone: fetchedWorker?.phone || posting.worker?.phone || "—",
-        workerSpecialization:
-          fetchedWorker?.specialization ||
-          posting.worker?.specialization ||
-          "—",
-        workerExperience: Number(fetchedWorker?.experience || 0),
-        workerProfileStatus: fetchedWorker?.status || "pending",
+        workerName: workerProfile?.name || "—",
+        workerEmail: workerProfile?.email || "—",
+        workerPhone: workerProfile?.phone || "—",
+        workerSpecialization: workerProfile?.specialization || "—",
+        workerExperience: Number(workerProfile?.experience || 0),
+        workerProfileStatus: workerProfile?.status || "pending",
         workerRoutePath: workerId ? `/worker/${workerId}` : null,
       };
     });
@@ -1099,10 +1114,10 @@ const getCompanyFullDetail = async (req, res) => {
       };
     });
 
+    const bidByIdMap = new Map(bids.map((entry) => [String(entry._id), entry]));
+
     const bidFinanceDetails = wonBidsWithCompany.map((bid) => {
-      const sourceBid = bids.find(
-        (entry) => String(entry._id) === String(bid._id),
-      );
+      const sourceBid = bidByIdMap.get(String(bid._id));
       const payouts = sourceBid?.paymentDetails?.payouts || [];
       const releasedPayouts = payouts.filter(
         (payout) => normalizeStatus(payout.status) === "released",
@@ -1274,27 +1289,26 @@ const getCompanyFullDetail = async (req, res) => {
 
 const getWorkerDetail = async (req, res) => {
   try {
-    const worker = await Worker.findById(req.params.id);
+    const worker = await Worker.findById(req.params.id).lean();
     if (!worker) {
       return res.status(404).json({ error: "Worker not found" });
     }
 
-    // Fetch all related projects and connections
-    const architectHirings = await ArchitectHiring.find({
-      worker: req.params.id,
-    })
-      .populate("customer", "name email phone")
-      .sort({ createdAt: -1 });
-
-    const designRequests = await DesignRequest.find({ workerId: req.params.id })
-      .populate("customerId", "name email phone")
-      .sort({ createdAt: -1 });
-
-    const jobApplications = await WorkerToCompany.find({
-      workerId: req.params.id,
-    })
-      .populate("companyId", "companyName email contactPerson")
-      .sort({ createdAt: -1 });
+    const [architectHirings, designRequests, jobApplications] =
+      await Promise.all([
+        ArchitectHiring.find({ worker: req.params.id })
+          .populate("customer", "name email phone")
+          .sort({ createdAt: -1 })
+          .lean(),
+        DesignRequest.find({ workerId: req.params.id })
+          .populate("customerId", "name email phone")
+          .sort({ createdAt: -1 })
+          .lean(),
+        WorkerToCompany.find({ workerId: req.params.id })
+          .populate("companyId", "companyName email contactPerson")
+          .sort({ createdAt: -1 })
+          .lean(),
+      ]);
 
     res.json({
       worker,
@@ -1345,14 +1359,26 @@ const getWorkerFullDetail = async (req, res) => {
       commissionAggregation,
     ] = await Promise.all([
       ArchitectHiring.find({ worker: workerId })
+        .select(
+          "projectName customer customerDetails.fullName status finalAmount proposal.price milestones review.customerToWorker paymentDetails.workerAmount paymentDetails.totalAmount createdAt updatedAt",
+        )
         .populate("customer", "name email phone")
         .sort({ createdAt: -1 })
         .lean(),
       DesignRequest.find({ workerId })
+        .select(
+          "projectName customerId fullName status finalAmount proposal.price milestones review.customerToWorker paymentDetails.workerAmount paymentDetails.totalAmount createdAt updatedAt",
+        )
         .populate("customerId", "name email phone")
         .sort({ createdAt: -1 })
         .lean(),
-      Transaction.find({ workerId }).sort({ createdAt: -1 }).limit(12).lean(),
+      Transaction.find({ workerId })
+        .select(
+          "createdAt transactionType amount netAmount platformFee status description",
+        )
+        .sort({ createdAt: -1 })
+        .limit(12)
+        .lean(),
       Transaction.aggregate([
         { $match: { workerId: worker._id } },
         {
@@ -1572,7 +1598,8 @@ const getArchitectHiringDetail = async (req, res) => {
   try {
     const hiring = await ArchitectHiring.findById(req.params.id)
       .populate("customer", "name email phone")
-      .populate("worker", "name email specialization");
+      .populate("worker", "name email specialization")
+      .lean();
     if (!hiring) {
       return res.status(404).json({ error: "Architect hiring not found" });
     }
@@ -1603,11 +1630,13 @@ const getArchitectHiringFullDetail = async (req, res) => {
       ? hiring.paymentDetails.milestonePayments
       : [];
 
-    const lastPaymentCollectedAt =
-      milestonePayments
-        .map((item) => item.paymentCollectedAt)
-        .filter(Boolean)
-        .sort((left, right) => new Date(right) - new Date(left))[0] || null;
+    const lastPaymentCollectedAt = milestonePayments.reduce((latest, item) => {
+      if (!item?.paymentCollectedAt) return latest;
+      if (!latest) return item.paymentCollectedAt;
+      return new Date(item.paymentCollectedAt) > new Date(latest)
+        ? item.paymentCollectedAt
+        : latest;
+    }, null);
 
     const paymentSummary = {
       totalAmount: Number(hiring.paymentDetails?.totalAmount || 0),
@@ -1748,7 +1777,8 @@ const getConstructionProjectDetail = async (req, res) => {
   try {
     const project = await ConstructionProjectSchema.findById(req.params.id)
       .populate("customerId", "name email phone")
-      .populate("companyId", "companyName contactPerson email");
+      .populate("companyId", "companyName contactPerson email")
+      .lean();
     if (!project) {
       return res.status(404).json({ error: "Construction project not found" });
     }
@@ -2061,7 +2091,8 @@ const getDesignRequestDetail = async (req, res) => {
   try {
     const request = await DesignRequest.findById(req.params.id)
       .populate("customerId", "name email phone")
-      .populate("workerId", "name email specialization");
+      .populate("workerId", "name email specialization")
+      .lean();
     if (!request) {
       return res.status(404).json({ error: "Design request not found" });
     }
@@ -2157,11 +2188,13 @@ const getDesignRequestFullDetail = async (req, res) => {
 
     const paymentInitiatedAt =
       request.paymentDetails?.paymentInitiatedAt || null;
-    const lastPaymentCollectedAt =
-      milestonePayments
-        .map((item) => item.paymentCollectedAt)
-        .filter(Boolean)
-        .sort((left, right) => new Date(right) - new Date(left))[0] || null;
+    const lastPaymentCollectedAt = milestonePayments.reduce((latest, item) => {
+      if (!item?.paymentCollectedAt) return latest;
+      if (!latest) return item.paymentCollectedAt;
+      return new Date(item.paymentCollectedAt) > new Date(latest)
+        ? item.paymentCollectedAt
+        : latest;
+    }, null);
 
     res.json({
       request,
@@ -2217,7 +2250,8 @@ const getBidDetail = async (req, res) => {
   try {
     const bid = await Bid.findById(req.params.id)
       .populate("customerId", "name email phone")
-      .populate("companyBids.companyId", "companyName email");
+      .populate("companyBids.companyId", "companyName email")
+      .lean();
     if (!bid) {
       return res.status(404).json({ error: "Bid not found" });
     }
@@ -2233,7 +2267,8 @@ const getJobApplicationDetail = async (req, res) => {
   try {
     const application = await WorkerToCompany.findById(req.params.id)
       .populate("workerId", "name email phone specialization")
-      .populate("companyId", "companyName contactPerson email");
+      .populate("companyId", "companyName contactPerson email")
+      .lean();
     if (!application) {
       return res.status(404).json({ error: "Job application not found" });
     }
@@ -2247,23 +2282,34 @@ const getJobApplicationDetail = async (req, res) => {
 
 const getAdminRevenue = async (req, res) => {
   try {
-    const { Transaction, Bid, ConstructionProjectSchema, ArchitectHiring, DesignRequest, Customer, Worker, Company } = require("../models");
-    
+    const {
+      Transaction,
+      Bid,
+      ConstructionProjectSchema,
+      ArchitectHiring,
+      DesignRequest,
+      Customer,
+      Worker,
+      Company,
+    } = require("../models");
+
     // 1. Setup Timeframe Boundaries
     const { timeframe } = req.query;
     let dateFilter = {};
-    if (timeframe && timeframe !== 'all') {
-       const now = new Date();
-       let start = new Date();
-       if (timeframe === 'week') start.setDate(now.getDate() - 7);
-       else if (timeframe === 'month') start.setMonth(now.getMonth() - 1);
-       else if (timeframe === 'quarter') start.setMonth(now.getMonth() - 3);
-       else if (timeframe === 'year') start.setFullYear(now.getFullYear() - 1);
-       dateFilter = { createdAt: { $gte: start } };
+    if (timeframe && timeframe !== "all") {
+      const now = new Date();
+      let start = new Date();
+      if (timeframe === "week") start.setDate(now.getDate() - 7);
+      else if (timeframe === "month") start.setMonth(now.getMonth() - 1);
+      else if (timeframe === "quarter") start.setMonth(now.getMonth() - 3);
+      else if (timeframe === "year") start.setFullYear(now.getFullYear() - 1);
+      dateFilter = { createdAt: { $gte: start } };
     }
 
     // Fetch records with date filter applied
-    const constructionProjects = await ConstructionProjectSchema.find(dateFilter)
+    const constructionProjects = await ConstructionProjectSchema.find(
+      dateFilter,
+    )
       .populate("customerId", "name email phone profileImage")
       .populate("companyId", "companyName email contactPerson logo")
       .sort({ createdAt: -1 });
@@ -2280,35 +2326,69 @@ const getAdminRevenue = async (req, res) => {
 
     const bids = await Bid.find(dateFilter)
       .populate("customerId", "name email phone")
-      
+
       .sort({ createdAt: -1 });
 
     // Track transactions within timeframe
-    const transactions = await Transaction.find({ ...dateFilter, status: { $ne: 'failed' } }).sort({ createdAt: 1 });
+    const transactions = await Transaction.find({
+      ...dateFilter,
+      status: { $ne: "failed" },
+    }).sort({ createdAt: 1 });
 
     // Users (Total overall, not necessarily bounded by time, for overall platform stats)
     const totalsUsers = {
       companies: await Company.countDocuments(),
       workers: await Worker.countDocuments(),
-      customers: await Customer.countDocuments()
+      customers: await Customer.countDocuments(),
     };
 
     let metrics = {
       totalPlatformRevenue: 0,
       receivedRevenue: 0,
       pendingRevenue: 0,
-      totalProjects: constructionProjects.length + architectHirings.length + designRequests.length,
+      totalProjects:
+        constructionProjects.length +
+        architectHirings.length +
+        designRequests.length,
       activeProjects: 0,
       completedProjects: 0,
       collectionRate: 0,
-      totalUsers: totalsUsers
+      totalUsers: totalsUsers,
     };
 
     let revenueByType = {
-      construction: { totalProjects: 0, platformRevenue: 0, receivedRevenue: 0, pendingRevenue: 0, activeProjects: 0, completedProjects: 0 },
-      architect: { totalProjects: 0, platformRevenue: 0, receivedRevenue: 0, pendingRevenue: 0, activeProjects: 0, completedProjects: 0 },
-      interior: { totalProjects: 0, platformRevenue: 0, receivedRevenue: 0, pendingRevenue: 0, activeProjects: 0, completedProjects: 0 },
-      bids: { totalProjects: 0, platformRevenue: 0, receivedRevenue: 0, pendingRevenue: 0, activeProjects: 0, completedProjects: 0 }
+      construction: {
+        totalProjects: 0,
+        platformRevenue: 0,
+        receivedRevenue: 0,
+        pendingRevenue: 0,
+        activeProjects: 0,
+        completedProjects: 0,
+      },
+      architect: {
+        totalProjects: 0,
+        platformRevenue: 0,
+        receivedRevenue: 0,
+        pendingRevenue: 0,
+        activeProjects: 0,
+        completedProjects: 0,
+      },
+      interior: {
+        totalProjects: 0,
+        platformRevenue: 0,
+        receivedRevenue: 0,
+        pendingRevenue: 0,
+        activeProjects: 0,
+        completedProjects: 0,
+      },
+      bids: {
+        totalProjects: 0,
+        platformRevenue: 0,
+        receivedRevenue: 0,
+        pendingRevenue: 0,
+        activeProjects: 0,
+        completedProjects: 0,
+      },
     };
 
     let phaseAnalytics = {
@@ -2328,7 +2408,7 @@ const getAdminRevenue = async (req, res) => {
 
     // Helper map to quickly find transactions for a given project ID
     const transactionsByProject = {};
-    transactions.forEach(t => {
+    transactions.forEach((t) => {
       const pid = t.projectId ? t.projectId.toString() : null;
       if (pid) {
         if (!transactionsByProject[pid]) transactionsByProject[pid] = [];
@@ -2337,21 +2417,31 @@ const getAdminRevenue = async (req, res) => {
     });
 
     // Populate construction projects
-    constructionProjects.forEach(cp => {
+    constructionProjects.forEach((cp) => {
       const tA = cp.paymentDetails?.totalAmount || cp.proposal?.price || 0;
-      const payouts = Array.isArray(cp.paymentDetails?.payouts) ? cp.paymentDetails.payouts : [];
-      const pc = payouts.reduce((sum, payout) => sum + Number(payout.platformFee || 0), 0);
+      const payouts = Array.isArray(cp.paymentDetails?.payouts)
+        ? cp.paymentDetails.payouts
+        : [];
+      const pc = payouts.reduce(
+        (sum, payout) => sum + Number(payout.platformFee || 0),
+        0,
+      );
       const prx = transactionsByProject[cp._id.toString()] || [];
 
       let rec = payouts
-        .filter((payout) => payout.platformFeeStatus === 'collected')
+        .filter((payout) => payout.platformFeeStatus === "collected")
         .reduce((sum, payout) => sum + Number(payout.platformFee || 0), 0);
       let pend = payouts
-        .filter((payout) => payout.platformFeeStatus === 'pending')
+        .filter((payout) => payout.platformFeeStatus === "pending")
         .reduce((sum, payout) => sum + Number(payout.platformFee || 0), 0);
-      if (cp.status === 'completed') { revenueByType.construction.completedProjects++; metrics.completedProjects++; }
-      else if (cp.status === 'ongoing' || cp.status === 'accepted') { revenueByType.construction.activeProjects++; metrics.activeProjects++; }
-      
+      if (cp.status === "completed") {
+        revenueByType.construction.completedProjects++;
+        metrics.completedProjects++;
+      } else if (cp.status === "ongoing" || cp.status === "accepted") {
+        revenueByType.construction.activeProjects++;
+        metrics.activeProjects++;
+      }
+
       revenueByType.construction.totalProjects++;
       revenueByType.construction.platformRevenue += pc;
       revenueByType.construction.receivedRevenue += rec;
@@ -2363,15 +2453,26 @@ const getAdminRevenue = async (req, res) => {
 
       // Track Star Members
       if (cp.customerId) {
-         if (!customerSpend[cp.customerId._id]) customerSpend[cp.customerId._id] = { user: cp.customerId, totalSpent: 0, projectsCount: 0 };
-         customerSpend[cp.customerId._id].totalSpent += tA;
-         customerSpend[cp.customerId._id].projectsCount += 1;
+        if (!customerSpend[cp.customerId._id])
+          customerSpend[cp.customerId._id] = {
+            user: cp.customerId,
+            totalSpent: 0,
+            projectsCount: 0,
+          };
+        customerSpend[cp.customerId._id].totalSpent += tA;
+        customerSpend[cp.customerId._id].projectsCount += 1;
       }
       if (cp.companyId) {
-         if (!companyRevenue[cp.companyId._id]) companyRevenue[cp.companyId._id] = { user: cp.companyId, totalEarned: 0, platformGenerated: 0, projectsCount: 0 };
-         companyRevenue[cp.companyId._id].totalEarned += (tA - pc);
-         companyRevenue[cp.companyId._id].platformGenerated += pc;
-         companyRevenue[cp.companyId._id].projectsCount += 1;
+        if (!companyRevenue[cp.companyId._id])
+          companyRevenue[cp.companyId._id] = {
+            user: cp.companyId,
+            totalEarned: 0,
+            platformGenerated: 0,
+            projectsCount: 0,
+          };
+        companyRevenue[cp.companyId._id].totalEarned += tA - pc;
+        companyRevenue[cp.companyId._id].platformGenerated += pc;
+        companyRevenue[cp.companyId._id].projectsCount += 1;
       }
 
       // Extract phase analytics
@@ -2380,39 +2481,56 @@ const getAdminRevenue = async (req, res) => {
         if (!key || !phaseAnalytics[key]) return;
         const pf = Number(payout.platformFee || 0);
         phaseAnalytics[key].total += pf;
-        if (payout.platformFeeStatus === 'collected') {
-         phaseAnalytics[key].received += pf;
-        } else if (payout.platformFeeStatus === 'pending') {
-         phaseAnalytics[key].pending += pf;
+        if (payout.platformFeeStatus === "collected") {
+          phaseAnalytics[key].received += pf;
+        } else if (payout.platformFeeStatus === "pending") {
+          phaseAnalytics[key].pending += pf;
         }
       });
 
       projectsList.push({
         _id: cp._id,
         createdAt: cp.createdAt,
-        projectName: cp.projectName || cp.projectTitle || "Construction Project",
-        projectType: 'construction',
+        projectName:
+          cp.projectName || cp.projectTitle || "Construction Project",
+        projectType: "construction",
         status: cp.status,
-        company: { name: cp.companyId?.companyName, contactPerson: cp.companyId?.contactPerson, email: cp.companyId?.email },
-        customer: { name: cp.customerId?.name, phone: cp.customerId?.phone, email: cp.customerId?.email },
+        company: {
+          name: cp.companyId?.companyName,
+          contactPerson: cp.companyId?.contactPerson,
+          email: cp.companyId?.email,
+        },
+        customer: {
+          name: cp.customerId?.name,
+          phone: cp.customerId?.phone,
+          email: cp.customerId?.email,
+        },
         totalAmount: tA,
         platformCommission: pc,
         receivedAmount: rec,
         pendingAmount: pend,
         transactions: prx,
-        phaseBreakdown: cp.paymentDetails?.phases || []
+        phaseBreakdown: cp.paymentDetails?.phases || [],
       });
     });
 
     // Populate Architect Hirings
-    architectHirings.forEach(ah => {
+    architectHirings.forEach((ah) => {
       const tA = ah.paymentDetails?.totalAmount || 0;
-      const pc = ah.paymentDetails?.platformCommission || (tA * 0.1);
+      const pc = ah.paymentDetails?.platformCommission || tA * 0.1;
       const prx = transactionsByProject[ah._id.toString()] || [];
 
-      let rec = 0; let pend = pc;
-      if (ah.status === 'completed') { rec = pc; pend = 0; revenueByType.architect.completedProjects++; metrics.completedProjects++; }
-      else { revenueByType.architect.activeProjects++; metrics.activeProjects++; }
+      let rec = 0;
+      let pend = pc;
+      if (ah.status === "completed") {
+        rec = pc;
+        pend = 0;
+        revenueByType.architect.completedProjects++;
+        metrics.completedProjects++;
+      } else {
+        revenueByType.architect.activeProjects++;
+        metrics.activeProjects++;
+      }
 
       revenueByType.architect.totalProjects++;
       revenueByType.architect.platformRevenue += pc;
@@ -2425,44 +2543,71 @@ const getAdminRevenue = async (req, res) => {
 
       // Track Star Members
       if (ah.customer) {
-         if (!customerSpend[ah.customer._id]) customerSpend[ah.customer._id] = { user: ah.customer, totalSpent: 0, projectsCount: 0 };
-         customerSpend[ah.customer._id].totalSpent += tA;
-         customerSpend[ah.customer._id].projectsCount += 1;
+        if (!customerSpend[ah.customer._id])
+          customerSpend[ah.customer._id] = {
+            user: ah.customer,
+            totalSpent: 0,
+            projectsCount: 0,
+          };
+        customerSpend[ah.customer._id].totalSpent += tA;
+        customerSpend[ah.customer._id].projectsCount += 1;
       }
       if (ah.worker) {
-         if (!workerRevenue[ah.worker._id]) workerRevenue[ah.worker._id] = { user: ah.worker, totalEarned: 0, platformGenerated: 0, projectsCount: 0 };
-         workerRevenue[ah.worker._id].totalEarned += (tA - pc);
-         workerRevenue[ah.worker._id].platformGenerated += pc;
-         workerRevenue[ah.worker._id].projectsCount += 1;
+        if (!workerRevenue[ah.worker._id])
+          workerRevenue[ah.worker._id] = {
+            user: ah.worker,
+            totalEarned: 0,
+            platformGenerated: 0,
+            projectsCount: 0,
+          };
+        workerRevenue[ah.worker._id].totalEarned += tA - pc;
+        workerRevenue[ah.worker._id].platformGenerated += pc;
+        workerRevenue[ah.worker._id].projectsCount += 1;
       }
 
       projectsList.push({
         _id: ah._id,
         createdAt: ah.createdAt,
         projectName: `Architect Design - ${ah.customer?.name || "Client"}`,
-        projectType: 'architect',
+        projectType: "architect",
         status: ah.status,
-        worker: { name: ah.worker?.name, email: ah.worker?.email, specialization: ah.worker?.specialization },
-        customer: { name: ah.customer?.name, phone: ah.customer?.phone, email: ah.customer?.email },
+        worker: {
+          name: ah.worker?.name,
+          email: ah.worker?.email,
+          specialization: ah.worker?.specialization,
+        },
+        customer: {
+          name: ah.customer?.name,
+          phone: ah.customer?.phone,
+          email: ah.customer?.email,
+        },
         totalAmount: tA,
         platformCommission: pc,
         receivedAmount: rec,
         pendingAmount: pend,
         transactions: prx,
         workerAmount: ah.paymentDetails?.workerAmount || 0,
-        roomType: ah.roomType || null
+        roomType: ah.roomType || null,
       });
     });
 
     // Populate Design Requests
-    designRequests.forEach(dr => {
+    designRequests.forEach((dr) => {
       const tA = dr.paymentDetails?.totalAmount || 0;
-      const pc = dr.paymentDetails?.platformCommission || (tA * 0.1);
+      const pc = dr.paymentDetails?.platformCommission || tA * 0.1;
       const prx = transactionsByProject[dr._id.toString()] || [];
 
-      let rec = 0; let pend = pc;
-      if (dr.status === 'completed') { rec = pc; pend = 0; revenueByType.interior.completedProjects++; metrics.completedProjects++; }
-      else { revenueByType.interior.activeProjects++; metrics.activeProjects++; }
+      let rec = 0;
+      let pend = pc;
+      if (dr.status === "completed") {
+        rec = pc;
+        pend = 0;
+        revenueByType.interior.completedProjects++;
+        metrics.completedProjects++;
+      } else {
+        revenueByType.interior.activeProjects++;
+        metrics.activeProjects++;
+      }
 
       revenueByType.interior.totalProjects++;
       revenueByType.interior.platformRevenue += pc;
@@ -2475,89 +2620,144 @@ const getAdminRevenue = async (req, res) => {
 
       // Track Star Members
       if (dr.customerId) {
-         if (!customerSpend[dr.customerId._id]) customerSpend[dr.customerId._id] = { user: dr.customerId, totalSpent: 0, projectsCount: 0 };
-         customerSpend[dr.customerId._id].totalSpent += tA;
-         customerSpend[dr.customerId._id].projectsCount += 1;
+        if (!customerSpend[dr.customerId._id])
+          customerSpend[dr.customerId._id] = {
+            user: dr.customerId,
+            totalSpent: 0,
+            projectsCount: 0,
+          };
+        customerSpend[dr.customerId._id].totalSpent += tA;
+        customerSpend[dr.customerId._id].projectsCount += 1;
       }
       if (dr.workerId) {
-         if (!workerRevenue[dr.workerId._id]) workerRevenue[dr.workerId._id] = { user: dr.workerId, totalEarned: 0, platformGenerated: 0, projectsCount: 0 };
-         workerRevenue[dr.workerId._id].totalEarned += (tA - pc);
-         workerRevenue[dr.workerId._id].platformGenerated += pc;
-         workerRevenue[dr.workerId._id].projectsCount += 1;
+        if (!workerRevenue[dr.workerId._id])
+          workerRevenue[dr.workerId._id] = {
+            user: dr.workerId,
+            totalEarned: 0,
+            platformGenerated: 0,
+            projectsCount: 0,
+          };
+        workerRevenue[dr.workerId._id].totalEarned += tA - pc;
+        workerRevenue[dr.workerId._id].platformGenerated += pc;
+        workerRevenue[dr.workerId._id].projectsCount += 1;
       }
 
       projectsList.push({
         _id: dr._id,
         createdAt: dr.createdAt,
         projectName: `Interior Design - ${dr.customerId?.name || "Client"}`,
-        projectType: 'interior',
+        projectType: "interior",
         status: dr.status,
-        worker: { name: dr.workerId?.name, email: dr.workerId?.email, specialization: dr.workerId?.specialization },
-        customer: { name: dr.customerId?.name, phone: dr.customerId?.phone, email: dr.customerId?.email },
+        worker: {
+          name: dr.workerId?.name,
+          email: dr.workerId?.email,
+          specialization: dr.workerId?.specialization,
+        },
+        customer: {
+          name: dr.customerId?.name,
+          phone: dr.customerId?.phone,
+          email: dr.customerId?.email,
+        },
         totalAmount: tA,
         platformCommission: pc,
         receivedAmount: rec,
         pendingAmount: pend,
         transactions: prx,
         workerAmount: dr.paymentDetails?.workerAmount || 0,
-        roomType: dr.roomType || null
+        roomType: dr.roomType || null,
       });
     });
 
-    metrics.collectionRate = metrics.totalPlatformRevenue ? 
-       Math.round((metrics.receivedRevenue / metrics.totalPlatformRevenue) * 100) : 0;
+    metrics.collectionRate = metrics.totalPlatformRevenue
+      ? Math.round(
+          (metrics.receivedRevenue / metrics.totalPlatformRevenue) * 100,
+        )
+      : 0;
 
     const monthlyMap = {};
-    const typeMap = { 'construction': revenueByType.construction.platformRevenue, 'architect': revenueByType.architect.platformRevenue, 'interior': revenueByType.interior.platformRevenue, 'bid': 0, 'subscription_fee': 0 };
+    const typeMap = {
+      construction: revenueByType.construction.platformRevenue,
+      architect: revenueByType.architect.platformRevenue,
+      interior: revenueByType.interior.platformRevenue,
+      bid: 0,
+      subscription_fee: 0,
+    };
 
-    transactions.forEach(t => {
-       const d = new Date(t.createdAt);
-       const mId = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-       const mName = d.toLocaleString('default', { month: 'short', year: 'numeric' });
-       
-       if (!monthlyMap[mId]) monthlyMap[mId] = { month: mName, ts: d.getTime(), revenue: 0, pending: 0 };
-       
-         const rev = (t.transactionType === 'platform_commission' || t.transactionType === 'platform_fee_collection' || t.transactionType === 'subscription_fee') 
-           ? (t.amount || t.netAmount || 0) : (t.platformFee || 0);
+    transactions.forEach((t) => {
+      const d = new Date(t.createdAt);
+      const mId = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const mName = d.toLocaleString("default", {
+        month: "short",
+        year: "numeric",
+      });
 
-       if (rev > 0) {
-         monthlyMap[mId].revenue += rev;
-         if (t.transactionType === 'subscription_fee') typeMap.subscription_fee += rev;
-         if (t.transactionType === 'bid_fee') typeMap.bid += rev;
-       }
+      if (!monthlyMap[mId])
+        monthlyMap[mId] = {
+          month: mName,
+          ts: d.getTime(),
+          revenue: 0,
+          pending: 0,
+        };
+
+      const rev =
+        t.transactionType === "platform_commission" ||
+        t.transactionType === "platform_fee_collection" ||
+        t.transactionType === "subscription_fee"
+          ? t.amount || t.netAmount || 0
+          : t.platformFee || 0;
+
+      if (rev > 0) {
+        monthlyMap[mId].revenue += rev;
+        if (t.transactionType === "subscription_fee")
+          typeMap.subscription_fee += rev;
+        if (t.transactionType === "bid_fee") typeMap.bid += rev;
+      }
     });
 
-    const monthlyData = Object.values(monthlyMap).sort((a,b) => a.ts - b.ts).map(m => ({month: m.month, revenue: m.revenue}));
+    const monthlyData = Object.values(monthlyMap)
+      .sort((a, b) => a.ts - b.ts)
+      .map((m) => ({ month: m.month, revenue: m.revenue }));
 
     // Find Top Contributors (Star Members)
-    const topCustomer = Object.values(customerSpend).sort((a,b) => b.totalSpent - a.totalSpent)[0] || null;
-    const topCompany = Object.values(companyRevenue).sort((a,b) => b.platformGenerated - a.platformGenerated)[0] || null;
-    const topWorker = Object.values(workerRevenue).sort((a,b) => b.platformGenerated - a.platformGenerated)[0] || null;
+    const topCustomer =
+      Object.values(customerSpend).sort(
+        (a, b) => b.totalSpent - a.totalSpent,
+      )[0] || null;
+    const topCompany =
+      Object.values(companyRevenue).sort(
+        (a, b) => b.platformGenerated - a.platformGenerated,
+      )[0] || null;
+    const topWorker =
+      Object.values(workerRevenue).sort(
+        (a, b) => b.platformGenerated - a.platformGenerated,
+      )[0] || null;
 
     res.json({
       success: true,
-      timeframe: timeframe || 'all',
+      timeframe: timeframe || "all",
       metrics,
       revenueByType,
       phaseAnalytics,
       topContributors: {
-         customer: topCustomer,
-         company: topCompany,
-         worker: topWorker
+        customer: topCustomer,
+        company: topCompany,
+        worker: topWorker,
       },
       projects: projectsList,
       charts: {
-        monthlyRevenue: monthlyData.length > 0 ? monthlyData : [{ month: 'Current', revenue: metrics.totalPlatformRevenue }],
+        monthlyRevenue:
+          monthlyData.length > 0
+            ? monthlyData
+            : [{ month: "Current", revenue: metrics.totalPlatformRevenue }],
         revenueByType: [
-          { name: 'Construction', value: typeMap.construction || 0 },
-          { name: 'Architecture', value: typeMap.architect || 0 },
-          { name: 'Design/Interior', value: typeMap.interior || 0 },
-          { name: 'Bids', value: typeMap.bid || 0 },
-          { name: 'Subscriptions', value: typeMap.subscription_fee || 0 }
-        ].filter(i => i.value > 0)
-      }
+          { name: "Construction", value: typeMap.construction || 0 },
+          { name: "Architecture", value: typeMap.architect || 0 },
+          { name: "Design/Interior", value: typeMap.interior || 0 },
+          { name: "Bids", value: typeMap.bid || 0 },
+          { name: "Subscriptions", value: typeMap.subscription_fee || 0 },
+        ].filter((i) => i.value > 0),
+      },
     });
-
   } catch (error) {
     console.error("Superadmin Details Error:", error);
     res.status(500).json({ success: false, error: error.message });
@@ -2567,17 +2767,17 @@ const getAdminRevenue = async (req, res) => {
 const getPlatformRevenueIntelligence = async (req, res) => {
   try {
     const {
-      timeframe = 'all',
+      timeframe = "all",
       startDate,
       endDate,
-      projectType = 'all',
-      feeStatus = 'all',
-      search = '',
+      projectType = "all",
+      feeStatus = "all",
+      search = "",
       page = 1,
       limit = 20,
     } = req.query;
 
-    const cacheKey = buildCacheKey('admin:platform-revenue-intelligence:v1', {
+    const cacheKey = buildCacheKey("admin:platform-revenue-intelligence:v1", {
       timeframe,
       startDate,
       endDate,
@@ -2608,30 +2808,36 @@ const getPlatformRevenueIntelligence = async (req, res) => {
           dateFilter.createdAt.$lte = end;
         }
       }
-      if (Object.keys(dateFilter.createdAt).length === 0) delete dateFilter.createdAt;
-    } else if (timeframe !== 'all') {
+      if (Object.keys(dateFilter.createdAt).length === 0)
+        delete dateFilter.createdAt;
+    } else if (timeframe !== "all") {
       const start = new Date();
-      if (timeframe === 'week') start.setDate(now.getDate() - 7);
-      else if (timeframe === 'month') start.setMonth(now.getMonth() - 1);
-      else if (timeframe === 'quarter') start.setMonth(now.getMonth() - 3);
-      else if (timeframe === 'year') start.setFullYear(now.getFullYear() - 1);
+      if (timeframe === "week") start.setDate(now.getDate() - 7);
+      else if (timeframe === "month") start.setMonth(now.getMonth() - 1);
+      else if (timeframe === "quarter") start.setMonth(now.getMonth() - 3);
+      else if (timeframe === "year") start.setFullYear(now.getFullYear() - 1);
       dateFilter = { createdAt: { $gte: start } };
     }
 
-    const [constructionProjects, architectProjects, interiorProjects, transactions] = await Promise.all([
+    const [
+      constructionProjects,
+      architectProjects,
+      interiorProjects,
+      transactions,
+    ] = await Promise.all([
       ConstructionProjectSchema.find(dateFilter)
-        .populate('customerId', 'name email phone')
-        .populate('companyId', 'companyName contactPerson email')
+        .populate("customerId", "name email phone")
+        .populate("companyId", "companyName contactPerson email")
         .lean(),
       ArchitectHiring.find(dateFilter)
-        .populate('customer', 'name email phone')
-        .populate('worker', 'name email specialization')
+        .populate("customer", "name email phone")
+        .populate("worker", "name email specialization")
         .lean(),
       DesignRequest.find(dateFilter)
-        .populate('customerId', 'name email phone')
-        .populate('workerId', 'name email specialization')
+        .populate("customerId", "name email phone")
+        .populate("workerId", "name email specialization")
         .lean(),
-      Transaction.find({ ...dateFilter, status: { $ne: 'failed' } })
+      Transaction.find({ ...dateFilter, status: { $ne: "failed" } })
         .sort({ createdAt: -1 })
         .lean(),
     ]);
@@ -2643,26 +2849,31 @@ const getPlatformRevenueIntelligence = async (req, res) => {
     };
 
     constructionProjects.forEach((project) => {
-      const payouts = Array.isArray(project?.paymentDetails?.payouts) ? project.paymentDetails.payouts : [];
-      const totalFee = payouts.reduce((sum, p) => sum + Number(p.platformFee || 0), 0);
+      const payouts = Array.isArray(project?.paymentDetails?.payouts)
+        ? project.paymentDetails.payouts
+        : [];
+      const totalFee = payouts.reduce(
+        (sum, p) => sum + Number(p.platformFee || 0),
+        0,
+      );
       const collected = payouts
-        .filter((p) => p.platformFeeStatus === 'collected')
+        .filter((p) => p.platformFeeStatus === "collected")
         .reduce((sum, p) => sum + Number(p.platformFee || 0), 0);
       const pending = payouts
-        .filter((p) => p.platformFeeStatus === 'pending')
+        .filter((p) => p.platformFeeStatus === "pending")
         .reduce((sum, p) => sum + Number(p.platformFee || 0), 0);
       const yetToCome = payouts
-        .filter((p) => (p.platformFeeStatus || 'not_due') === 'not_due')
+        .filter((p) => (p.platformFeeStatus || "not_due") === "not_due")
         .reduce((sum, p) => sum + Number(p.platformFee || 0), 0);
 
       pushProjectRow({
         projectId: project._id,
-        projectType: 'construction',
-        projectName: project.projectName || 'Construction Project',
-        fromParty: project.companyId?.companyName || 'Company',
-        fromPartyType: 'company',
-        toParty: 'Platform',
-        customerName: project.customerId?.name || 'Customer',
+        projectType: "construction",
+        projectName: project.projectName || "Construction Project",
+        fromParty: project.companyId?.companyName || "Company",
+        fromPartyType: "company",
+        toParty: "Platform",
+        customerName: project.customerId?.name || "Customer",
         totalFee,
         collected,
         pending,
@@ -2670,9 +2881,11 @@ const getPlatformRevenueIntelligence = async (req, res) => {
         status: project.status,
         feeTimeline: payouts.map((payout, index) => ({
           label: payout.phaseName || `Phase ${index + 1}`,
-          milestonePercentage: Number(payout.milestonePercentage || (index + 1) * 25),
+          milestonePercentage: Number(
+            payout.milestonePercentage || (index + 1) * 25,
+          ),
           platformFee: Number(payout.platformFee || 0),
-          feeStatus: payout.platformFeeStatus || 'not_due',
+          feeStatus: payout.platformFeeStatus || "not_due",
           collectedAt: payout.platformFeeCollectedAt || null,
           invoiceUrl: payout.platformFeeInvoiceUrl || null,
         })),
@@ -2680,28 +2893,41 @@ const getPlatformRevenueIntelligence = async (req, res) => {
     });
 
     const workerProjectRowsBuilder = (project, type) => {
-      const milestones = Array.isArray(project?.paymentDetails?.milestonePayments)
+      const milestones = Array.isArray(
+        project?.paymentDetails?.milestonePayments,
+      )
         ? project.paymentDetails.milestonePayments
         : [];
-      const totalFee = milestones.reduce((sum, m) => sum + Number(m.platformFee || 0), 0);
+      const totalFee = milestones.reduce(
+        (sum, m) => sum + Number(m.platformFee || 0),
+        0,
+      );
       const collected = milestones
-        .filter((m) => (m.platformFeeStatus || 'not_due') === 'collected')
+        .filter((m) => (m.platformFeeStatus || "not_due") === "collected")
         .reduce((sum, m) => sum + Number(m.platformFee || 0), 0);
       const pending = milestones
-        .filter((m) => (m.platformFeeStatus || 'not_due') === 'pending')
+        .filter((m) => (m.platformFeeStatus || "not_due") === "pending")
         .reduce((sum, m) => sum + Number(m.platformFee || 0), 0);
       const yetToCome = milestones
-        .filter((m) => (m.platformFeeStatus || 'not_due') === 'not_due')
+        .filter((m) => (m.platformFeeStatus || "not_due") === "not_due")
         .reduce((sum, m) => sum + Number(m.platformFee || 0), 0);
 
       pushProjectRow({
         projectId: project._id,
         projectType: type,
-        projectName: project.projectName || (type === 'architect' ? 'Architect Project' : 'Interior Project'),
-        fromParty: (type === 'architect' ? project.worker?.name : project.workerId?.name) || 'Worker',
-        fromPartyType: 'worker',
-        toParty: 'Platform',
-        customerName: (type === 'architect' ? project.customer?.name : project.customerId?.name) || 'Customer',
+        projectName:
+          project.projectName ||
+          (type === "architect" ? "Architect Project" : "Interior Project"),
+        fromParty:
+          (type === "architect"
+            ? project.worker?.name
+            : project.workerId?.name) || "Worker",
+        fromPartyType: "worker",
+        toParty: "Platform",
+        customerName:
+          (type === "architect"
+            ? project.customer?.name
+            : project.customerId?.name) || "Customer",
         totalFee,
         collected,
         pending,
@@ -2711,44 +2937,68 @@ const getPlatformRevenueIntelligence = async (req, res) => {
           label: `${Number(milestone.percentage || (index + 1) * 25)}% Milestone`,
           milestonePercentage: Number(milestone.percentage || (index + 1) * 25),
           platformFee: Number(milestone.platformFee || 0),
-          feeStatus: milestone.platformFeeStatus || 'not_due',
+          feeStatus: milestone.platformFeeStatus || "not_due",
           collectedAt: milestone.platformFeeCollectedAt || null,
           invoiceUrl: null,
         })),
       });
     };
 
-    architectProjects.forEach((project) => workerProjectRowsBuilder(project, 'architect'));
-    interiorProjects.forEach((project) => workerProjectRowsBuilder(project, 'interior'));
+    architectProjects.forEach((project) =>
+      workerProjectRowsBuilder(project, "architect"),
+    );
+    interiorProjects.forEach((project) =>
+      workerProjectRowsBuilder(project, "interior"),
+    );
 
     let filteredProjects = projectRows;
-    if (projectType !== 'all') {
-      filteredProjects = filteredProjects.filter((row) => row.projectType === projectType);
+    if (projectType !== "all") {
+      filteredProjects = filteredProjects.filter(
+        (row) => row.projectType === projectType,
+      );
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      filteredProjects = filteredProjects.filter((row) =>
-        String(row.projectName || '').toLowerCase().includes(q)
-        || String(row.fromParty || '').toLowerCase().includes(q)
-        || String(row.customerName || '').toLowerCase().includes(q),
+      filteredProjects = filteredProjects.filter(
+        (row) =>
+          String(row.projectName || "")
+            .toLowerCase()
+            .includes(q) ||
+          String(row.fromParty || "")
+            .toLowerCase()
+            .includes(q) ||
+          String(row.customerName || "")
+            .toLowerCase()
+            .includes(q),
       );
     }
 
     const getLifecycleStatus = (row) => {
-      if (row.pending > 0) return 'pending';
-      if (row.yetToCome > 0) return 'yet_to_come';
-      if (row.collected > 0) return 'collected';
-      return 'none';
+      if (row.pending > 0) return "pending";
+      if (row.yetToCome > 0) return "yet_to_come";
+      if (row.collected > 0) return "collected";
+      return "none";
     };
 
-    if (feeStatus !== 'all') {
-      filteredProjects = filteredProjects.filter((row) => getLifecycleStatus(row) === feeStatus);
+    if (feeStatus !== "all") {
+      filteredProjects = filteredProjects.filter(
+        (row) => getLifecycleStatus(row) === feeStatus,
+      );
     }
 
     const statusBreakdown = {
-      collected: filteredProjects.reduce((sum, row) => sum + Number(row.collected || 0), 0),
-      pending: filteredProjects.reduce((sum, row) => sum + Number(row.pending || 0), 0),
-      yetToCome: filteredProjects.reduce((sum, row) => sum + Number(row.yetToCome || 0), 0),
+      collected: filteredProjects.reduce(
+        (sum, row) => sum + Number(row.collected || 0),
+        0,
+      ),
+      pending: filteredProjects.reduce(
+        (sum, row) => sum + Number(row.pending || 0),
+        0,
+      ),
+      yetToCome: filteredProjects.reduce(
+        (sum, row) => sum + Number(row.yetToCome || 0),
+        0,
+      ),
     };
 
     const typeBreakdownMap = {
@@ -2774,47 +3024,55 @@ const getPlatformRevenueIntelligence = async (req, res) => {
     const relatedTransactions = transactions.filter((transaction) => {
       const txType = transaction.transactionType;
       const allowed = [
-        'platform_fee_due',
-        'platform_fee_collection',
-        'platform_commission',
-        'escrow_hold',
-        'milestone_release',
+        "platform_fee_due",
+        "platform_fee_collection",
+        "platform_commission",
+        "escrow_hold",
+        "milestone_release",
       ].includes(txType);
       if (!allowed) return false;
-      if (projectType !== 'all' && transaction.projectType !== projectType) return false;
+      if (projectType !== "all" && transaction.projectType !== projectType)
+        return false;
       return true;
     });
 
     const monthlyMap = {};
     relatedTransactions.forEach((transaction) => {
       const dt = new Date(transaction.createdAt);
-      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
       if (!monthlyMap[key]) {
         monthlyMap[key] = {
-          month: dt.toLocaleString('default', { month: 'short', year: 'numeric' }),
+          month: dt.toLocaleString("default", {
+            month: "short",
+            year: "numeric",
+          }),
           ts: dt.getTime(),
           collected: 0,
           pending: 0,
         };
       }
       const amount = Number(transaction.platformFee || transaction.amount || 0);
-      if (transaction.transactionType === 'platform_fee_collection' || transaction.transactionType === 'platform_commission') {
+      if (
+        transaction.transactionType === "platform_fee_collection" ||
+        transaction.transactionType === "platform_commission"
+      ) {
         monthlyMap[key].collected += amount;
-      } else if (transaction.transactionType === 'platform_fee_due') {
+      } else if (transaction.transactionType === "platform_fee_due") {
         monthlyMap[key].pending += amount;
       }
     });
 
     const detailedTransactions = relatedTransactions.map((transaction) => {
-      const txProjectType = transaction.projectType || 'unknown';
+      const txProjectType = transaction.projectType || "unknown";
       const txMilestone = Number(transaction.milestonePercentage || 0);
       const invoiceKey = `${transaction.projectId}_${txMilestone}`;
       const feeStatusValue =
-        transaction.transactionType === 'platform_fee_collection' || transaction.transactionType === 'platform_commission'
-          ? 'collected'
-          : transaction.transactionType === 'platform_fee_due'
-            ? 'pending'
-            : 'flow';
+        transaction.transactionType === "platform_fee_collection" ||
+        transaction.transactionType === "platform_commission"
+          ? "collected"
+          : transaction.transactionType === "platform_fee_due"
+            ? "pending"
+            : "flow";
 
       return {
         _id: transaction._id,
@@ -2827,19 +3085,31 @@ const getPlatformRevenueIntelligence = async (req, res) => {
         platformFee: Number(transaction.platformFee || 0),
         netAmount: Number(transaction.netAmount || 0),
         status: transaction.status,
-        paymentMethod: transaction.paymentMethod || 'na',
-        description: transaction.description || '',
-        fromPartyType: transaction.companyId ? 'company' : transaction.workerId ? 'worker' : transaction.customerId ? 'customer' : 'system',
-        toPartyType: 'platform',
+        paymentMethod: transaction.paymentMethod || "na",
+        description: transaction.description || "",
+        fromPartyType: transaction.companyId
+          ? "company"
+          : transaction.workerId
+            ? "worker"
+            : transaction.customerId
+              ? "customer"
+              : "system",
+        toPartyType: "platform",
         feeStatus: feeStatusValue,
-        invoiceUrl: txProjectType === 'construction' ? invoiceMap[invoiceKey] || null : null,
+        invoiceUrl:
+          txProjectType === "construction"
+            ? invoiceMap[invoiceKey] || null
+            : null,
         razorpayOrderId: transaction.razorpayOrderId || null,
         razorpayPaymentId: transaction.razorpayPaymentId || null,
       };
     });
 
     const offset = (Number(page) - 1) * Number(limit);
-    const paginatedTransactions = detailedTransactions.slice(offset, offset + Number(limit));
+    const paginatedTransactions = detailedTransactions.slice(
+      offset,
+      offset + Number(limit),
+    );
 
     const responsePayload = {
       success: true,
@@ -2857,37 +3127,56 @@ const getPlatformRevenueIntelligence = async (req, res) => {
         totalCollected: statusBreakdown.collected,
         totalPending: statusBreakdown.pending,
         totalYetToCome: statusBreakdown.yetToCome,
-        totalExpected: statusBreakdown.collected + statusBreakdown.pending + statusBreakdown.yetToCome,
-        activeFeeProjects: filteredProjects.filter((row) => row.pending > 0 || row.yetToCome > 0).length,
+        totalExpected:
+          statusBreakdown.collected +
+          statusBreakdown.pending +
+          statusBreakdown.yetToCome,
+        activeFeeProjects: filteredProjects.filter(
+          (row) => row.pending > 0 || row.yetToCome > 0,
+        ).length,
         totalTrackedProjects: filteredProjects.length,
-        collectionRate: (statusBreakdown.collected + statusBreakdown.pending + statusBreakdown.yetToCome) > 0
-          ? Math.round((statusBreakdown.collected / (statusBreakdown.collected + statusBreakdown.pending + statusBreakdown.yetToCome)) * 100)
-          : 0,
+        collectionRate:
+          statusBreakdown.collected +
+            statusBreakdown.pending +
+            statusBreakdown.yetToCome >
+          0
+            ? Math.round(
+                (statusBreakdown.collected /
+                  (statusBreakdown.collected +
+                    statusBreakdown.pending +
+                    statusBreakdown.yetToCome)) *
+                  100,
+              )
+            : 0,
       },
       charts: {
         monthlyFeeFlow: Object.values(monthlyMap)
           .sort((a, b) => a.ts - b.ts)
-          .map((m) => ({ month: m.month, collected: m.collected, pending: m.pending })),
+          .map((m) => ({
+            month: m.month,
+            collected: m.collected,
+            pending: m.pending,
+          })),
         feeStatusDistribution: [
-          { name: 'Collected', value: statusBreakdown.collected },
-          { name: 'Pending', value: statusBreakdown.pending },
-          { name: 'Yet To Come', value: statusBreakdown.yetToCome },
+          { name: "Collected", value: statusBreakdown.collected },
+          { name: "Pending", value: statusBreakdown.pending },
+          { name: "Yet To Come", value: statusBreakdown.yetToCome },
         ],
         feeByProjectType: [
           {
-            type: 'Construction',
+            type: "Construction",
             collected: typeBreakdownMap.construction.collected,
             pending: typeBreakdownMap.construction.pending,
             yetToCome: typeBreakdownMap.construction.yetToCome,
           },
           {
-            type: 'Architect',
+            type: "Architect",
             collected: typeBreakdownMap.architect.collected,
             pending: typeBreakdownMap.architect.pending,
             yetToCome: typeBreakdownMap.architect.yetToCome,
           },
           {
-            type: 'Interior',
+            type: "Interior",
             collected: typeBreakdownMap.interior.collected,
             pending: typeBreakdownMap.interior.pending,
             yetToCome: typeBreakdownMap.interior.yetToCome,
@@ -2907,7 +3196,7 @@ const getPlatformRevenueIntelligence = async (req, res) => {
 
     res.json(responsePayload);
   } catch (error) {
-    console.error('Platform revenue intelligence error:', error);
+    console.error("Platform revenue intelligence error:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 };
@@ -2917,7 +3206,7 @@ const getRedisCacheStatsAdmin = async (_req, res) => {
     const stats = getRedisCacheStats();
     res.json({ success: true, stats });
   } catch (error) {
-    console.error('Get Redis cache stats error:', error);
+    console.error("Get Redis cache stats error:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 };
@@ -2930,12 +3219,12 @@ const resetRedisCacheStatsAdmin = async (_req, res) => {
 
     res.json({
       success: true,
-      message: 'Redis cache stats reset successfully',
+      message: "Redis cache stats reset successfully",
       before,
       after,
     });
   } catch (error) {
-    console.error('Reset Redis cache stats error:', error);
+    console.error("Reset Redis cache stats error:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 };

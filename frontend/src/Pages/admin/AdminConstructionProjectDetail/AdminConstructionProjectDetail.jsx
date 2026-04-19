@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Clock,
   Compass,
-  Download,
   FileText,
   Home,
   Layers,
@@ -232,12 +231,6 @@ const AdminConstructionProjectDetail = () => {
             <p>Project ID: {project._id}</p>
           </div>
           <div className="customer360-header-actions">
-            <ActionButton
-              label="Export Project Details"
-              icon={Download}
-              variant="secondary"
-              onClick={() => window.print()}
-            />
             {customerRoute && (
               <ActionButton
                 label="View Customer"

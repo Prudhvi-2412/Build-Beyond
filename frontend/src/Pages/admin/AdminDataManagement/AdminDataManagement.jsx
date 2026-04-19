@@ -13,11 +13,15 @@ import {
 import { useAdminAuth } from "../../../context/AdminAuthContext";
 import "./AdminDataManagement.css";
 
-  const AdminDataManagement = () => {
+const AdminDataManagement = () => {
   const navigate = useNavigate();
   const { role, isReadOnly, basePath } = useAdminAuth();
   // Allow superadmin, standard admin (if not read-only), to manage/delete items
-  const canManage = (role === "superadmin" || role === "admin" || role === "platform_manager") && !isReadOnly;
+  const canManage =
+    (role === "superadmin" ||
+      role === "admin" ||
+      role === "platform_manager") &&
+    !isReadOnly;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -43,18 +47,20 @@ import "./AdminDataManagement.css";
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admindashboard`, {
-        credentials: "include",
-      });
+      const [res, complaintsRes] = await Promise.all([
+        fetch(`/api/admindashboard`, {
+          credentials: "include",
+        }),
+        fetch(`/api/complaints/unviewed/count`, {
+          credentials: "include",
+        }),
+      ]);
       if (!res.ok) throw new Error(`Server ${res.status}`);
       const json = await res.json();
       setData(json);
       setError(null);
 
       try {
-        const complaintsRes = await fetch(`/api/complaints/unviewed/count`, {
-          credentials: "include",
-        });
         const complaintsData = await complaintsRes.json();
         if (complaintsData.success) {
           const complaintsMap = {};
