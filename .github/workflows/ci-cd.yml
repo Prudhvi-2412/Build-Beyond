@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
@@ -52,7 +52,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -87,9 +87,31 @@ jobs:
       - name: Trigger Render backend deploy
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-        run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
+        run: |
+          response_file=$(mktemp)
+          status_code=$(curl -sS -o "$response_file" -w "%{http_code}" -X POST "$RENDER_DEPLOY_HOOK_URL")
+          echo "Render deploy hook HTTP status: $status_code"
+
+          if [ "$status_code" -lt 200 ] || [ "$status_code" -ge 300 ]; then
+            echo "Render deploy hook failed. Response body:"
+            cat "$response_file"
+            exit 1
+          fi
+
+          echo "Render deploy hook triggered successfully"
 
       - name: Trigger Vercel frontend deploy
         env:
           VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
-        run: curl -fsS -X POST "$VERCEL_DEPLOY_HOOK_URL"
+        run: |
+          response_file=$(mktemp)
+          status_code=$(curl -sS -o "$response_file" -w "%{http_code}" -X POST "$VERCEL_DEPLOY_HOOK_URL")
+          echo "Vercel deploy hook HTTP status: $status_code"
+
+          if [ "$status_code" -lt 200 ] || [ "$status_code" -ge 300 ]; then
+            echo "Vercel deploy hook failed. Response body:"
+            cat "$response_file"
+            exit 1
+          fi
+
+          echo "Vercel deploy hook triggered successfully"
