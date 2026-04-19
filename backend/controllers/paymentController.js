@@ -23,10 +23,14 @@ const RAZORPAY_MAX_ORDER_AMOUNT_INR = Number(
 );
 const ADMIN_REVENUE_INTELLIGENCE_CACHE_PREFIX =
   "admin:platform-revenue-intelligence:v1";
+const ADMIN_ANALYTICS_CACHE_PREFIX = "admin:analytics:v1";
 
 const invalidateAdminRevenueIntelligenceCache = async () => {
   try {
-    await invalidateCacheByPrefix(ADMIN_REVENUE_INTELLIGENCE_CACHE_PREFIX);
+    await Promise.all([
+      invalidateCacheByPrefix(ADMIN_REVENUE_INTELLIGENCE_CACHE_PREFIX),
+      invalidateCacheByPrefix(ADMIN_ANALYTICS_CACHE_PREFIX),
+    ]);
   } catch (error) {
     console.error(
       "Failed to invalidate admin revenue intelligence cache:",

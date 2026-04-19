@@ -7,6 +7,13 @@ const {
   DesignRequest,
   Bid,
 } = require("../models");
+const {
+  buildCacheKey,
+  getCacheJson,
+  setCacheJson,
+} = require("../utils/redisCache");
+
+const ADMIN_ANALYTICS_CACHE_PREFIX = "admin:analytics:v1";
 
 const toNumber = (value) => {
   const number = Number(value);
@@ -178,6 +185,15 @@ const getAdminAnalytics = async (req, res) => {
     )
       ? timeFilter
       : "month";
+
+    const cacheKey = buildCacheKey(ADMIN_ANALYTICS_CACHE_PREFIX, {
+      timeFilter: validFilter,
+    });
+
+    const cachedPayload = await getCacheJson(cacheKey);
+    if (cachedPayload) {
+      return res.status(200).json(cachedPayload);
+    }
 
     const range = getRangeBounds(validFilter);
     const query = queryFromRange(range);
@@ -741,7 +757,7 @@ const getAdminAnalytics = async (req, res) => {
 
     starMembers.leaderboard = leaderboard;
 
-    res.status(200).json({
+    const responsePayload = {
       timeFilter: validFilter,
       counts,
       stats,
@@ -760,7 +776,11 @@ const getAdminAnalytics = async (req, res) => {
         revenueBreakdown,
       },
       starMembers,
-    });
+    };
+
+    await setCacheJson(cacheKey, responsePayload, 120);
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     console.error("Error fetching admin analytics:", error);
     res.status(500).json({ error: "Failed to fetch admin analytics" });
