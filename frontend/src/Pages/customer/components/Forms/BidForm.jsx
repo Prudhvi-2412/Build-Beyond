@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import axiosInstance from '../../../../api/axiosInstance';
 import "./BidForm.css";
 import { useNavigate } from "react-router-dom";
 import { useValidation } from "../../../../context/ValidationContext";
@@ -527,7 +527,7 @@ const BidForm = () => {
     }
 
     try {
-      const response = await axios.post("/api/bidForm_Submit", formData, {
+      const response = await axiosInstance.post("/api/bidForm_Submit", formData, {
         headers: { "Content-Type": "multipart/form-data" },
         withCredentials: true,
       });

@@ -1,6 +1,6 @@
 // src/Pages/customer/components/customer-bidspace/CustomerBidspace.jsx
 import React, { useState, useEffect, useCallback } from "react";
-import axios from "axios";
+import axiosInstance from '../../../../api/axiosInstance';
 import { Link } from "react-router-dom";
 import CustomerPageLoader from "../common/CustomerPageLoader";
 import "./CustomerBidspace.css";
@@ -13,7 +13,7 @@ const CustomerBidspace = () => {
   useEffect(() => {
     const fetchBids = async () => {
       try {
-        const res = await axios.get("/api/bidspace", {
+        const res = await axiosInstance.get("/api/bidspace", {
           withCredentials: true,
         });
         const data = res.data.customerBids || [];
@@ -36,7 +36,7 @@ const CustomerBidspace = () => {
   const declineBid = async (bidId, companyBidId) => {
     if (!window.confirm("Are you sure you want to decline this bid?")) return;
     try {
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         "/api/customer/decline-bid",
         { bidId, companyBidId },
         { withCredentials: true },

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import axios from "axios";
+import axiosInstance from '../../../../api/axiosInstance';
 import CustomerPageLoader from "../common/CustomerPageLoader";
 import {
   readFavoritesByType,
@@ -28,10 +28,10 @@ const CustomerConstruction = () => {
     const fetchCompanies = async () => {
       try {
         const [companiesRes, statusRes] = await Promise.allSettled([
-          axios.get("/api/construction_companies_list", {
+          axiosInstance.get("/api/construction_companies_list", {
             withCredentials: true,
           }),
-          axios.get("/api/job_status", { withCredentials: true }),
+          axiosInstance.get("/api/job_status", { withCredentials: true }),
         ]);
 
         if (companiesRes.status === "fulfilled") {

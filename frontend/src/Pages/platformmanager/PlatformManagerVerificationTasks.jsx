@@ -3,6 +3,9 @@ import { Building2, CheckCircle, Clock, Loader2, TrendingUp, Users, XCircle, Ale
 import AdminLayout from "../../components/admin/AdminLayout";
 import "./PlatformManagerDashboard.css";
 
+const _API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+
+
 const getDocumentUrl = (path) => {
   if (!path) return "";
   if (path.startsWith("http")) return path;
@@ -22,7 +25,7 @@ const PlatformManagerVerificationTasks = () => {
   const fetchVerificationTasks = async () => {
     try {
       setError("");
-      const response = await fetch("/api/platform-manager/dashboard", {
+      const response = await fetch(`${_API_BASE}/api/platform-manager/dashboard`, {
         credentials: "include",
       });
       const data = await response.json();
@@ -50,7 +53,7 @@ const PlatformManagerVerificationTasks = () => {
 
   const handleProcessTask = async (taskId, action, notes = "") => {
     try {
-      const response = await fetch(`/api/platform-manager/verification/${taskId}/process`, {
+      const response = await fetch(`${_API_BASE}/api/platform-manager/verification/${taskId}/process`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -78,7 +81,7 @@ const PlatformManagerVerificationTasks = () => {
     setDetailsLoading(true);
     setTaskDetails(null);
     try {
-      const response = await fetch(`/api/platform-manager/verification/${task._id}`, {
+      const response = await fetch(`${_API_BASE}/api/platform-manager/verification/${task._id}`, {
         credentials: "include",
       });
       const data = await response.json();

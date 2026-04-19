@@ -14,6 +14,9 @@ import CompletionImagesUpload from './components/CompletionImagesUpload';
 import RecentUpdates from './components/RecentUpdates';
 import FormButtons from './components/FormButtons';
 
+const _API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+
+
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const allowedTypes = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
 
@@ -49,7 +52,7 @@ const CompanyAddNewProject = () => {
       if (!projectId) return;
       try {
         setLoading(true);
-        const res = await fetch("/api/companyongoing_projects", { credentials: "include" });
+        const res = await fetch(`${_API_BASE}/api/companyongoing_projects`, { credentials: "include" });
         if (!res.ok) throw new Error("Failed to load projects");
         const json = await res.json();
         const found = (json.projects || []).find((p) => p._id === projectId);
@@ -211,7 +214,7 @@ const CompanyAddNewProject = () => {
       if (updateImage) formData.append("updateImages", updateImage);
 
       // original EJS used action "/api/projects/update"; keep that path
-      const res = await fetch("/api/projects/update", {
+      const res = await fetch(`${_API_BASE}/api/projects/update`, {
         method: "POST",
         credentials: "include",
         body: formData,

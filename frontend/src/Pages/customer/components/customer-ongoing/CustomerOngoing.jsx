@@ -1,6 +1,6 @@
 // src/Pages/customer/components/customer-ongoing/CustomerOngoing.jsx
 import React, { useState, useEffect, useCallback } from "react";
-import axios from "axios";
+import axiosInstance from "../../../../api/axiosInstance";
 import { useSearchParams } from "react-router-dom";
 import "./CustomerOngoing.css";
 import Modal from "react-modal";
@@ -123,14 +123,14 @@ const CustomerOngoing = () => {
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        const res = await axios.get("/api/ongoing_projects", {
+        const res = await axiosInstance.get("/api/ongoing_projects", {
           withCredentials: true,
         });
         setProjects(res.data.projects || []);
 
         // Fetch unviewed company messages
         try {
-          const messagesRes = await axios.get(
+          const messagesRes = await axiosInstance.get(
             "/api/customer/unviewed-company-messages",
             {
               withCredentials: true,
@@ -249,7 +249,7 @@ const CustomerOngoing = () => {
       });
 
       try {
-        await axios.post(
+        await axiosInstance.post(
           `/api/customer/mark-messages-viewed/${id}`,
           {},
           {
@@ -289,7 +289,7 @@ const CustomerOngoing = () => {
     }
 
     try {
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         "/api/customer/accept-proposal",
         { projectId },
         { withCredentials: true },
@@ -298,7 +298,7 @@ const CustomerOngoing = () => {
       if (res.data.success) {
         alert("Proposal accepted successfully!");
         // Refresh projects
-        const projectsRes = await axios.get("/api/ongoing_projects", {
+        const projectsRes = await axiosInstance.get("/api/ongoing_projects", {
           withCredentials: true,
         });
         setProjects(projectsRes.data.projects || []);
@@ -319,7 +319,7 @@ const CustomerOngoing = () => {
     }
 
     try {
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         "/api/customer/approve-milestone",
         { projectId, milestonePercentage },
         { withCredentials: true },
@@ -328,7 +328,7 @@ const CustomerOngoing = () => {
       if (res.data.success) {
         alert(res.data.message);
         // Refresh projects
-        const projectsRes = await axios.get("/api/ongoing_projects", {
+        const projectsRes = await axiosInstance.get("/api/ongoing_projects", {
           withCredentials: true,
         });
         setProjects(projectsRes.data.projects || []);
@@ -352,7 +352,7 @@ const CustomerOngoing = () => {
   const handlePaymentSuccess = useCallback(async () => {
     setPaymentModal(null);
     try {
-      const res = await axios.get("/api/ongoing_projects", {
+      const res = await axiosInstance.get("/api/ongoing_projects", {
         withCredentials: true,
       });
       setProjects(res.data.projects || []);
@@ -370,7 +370,7 @@ const CustomerOngoing = () => {
     }
 
     try {
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         "/api/customer/request-milestone-revision",
         { projectId, milestonePercentage, feedback },
         { withCredentials: true },
@@ -381,7 +381,7 @@ const CustomerOngoing = () => {
         setShowRevisionModal(null);
         setRevisionFeedback({});
         // Refresh projects
-        const projectsRes = await axios.get("/api/ongoing_projects", {
+        const projectsRes = await axiosInstance.get("/api/ongoing_projects", {
           withCredentials: true,
         });
         setProjects(projectsRes.data.projects || []);
@@ -402,7 +402,7 @@ const CustomerOngoing = () => {
     }
 
     try {
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         "/api/customer/submit-project-review",
         { projectId, rating, reviewText: text },
         { withCredentials: true },
@@ -414,7 +414,7 @@ const CustomerOngoing = () => {
         setReviewRating({});
         setReviewText({});
         // Refresh projects
-        const projectsRes = await axios.get("/api/ongoing_projects", {
+        const projectsRes = await axiosInstance.get("/api/ongoing_projects", {
           withCredentials: true,
         });
         setProjects(projectsRes.data.projects || []);
@@ -428,7 +428,7 @@ const CustomerOngoing = () => {
   const fetchComplaintHistory = async (projectId, milestone) => {
     setComplaintHistoryLoading(true);
     try {
-      const response = await axios.get(`/api/complaints/${projectId}`, {
+      const response = await axiosInstance.get(`/api/complaints/${projectId}`, {
         withCredentials: true,
       });
       const milestoneValue = Number(milestone === "general" ? 0 : milestone);
@@ -462,7 +462,7 @@ const CustomerOngoing = () => {
     setComplaintLoading(true);
     setComplaintError(null);
     try {
-      await axios.post(
+      await axiosInstance.post(
         "/api/complaints",
         {
           projectId,

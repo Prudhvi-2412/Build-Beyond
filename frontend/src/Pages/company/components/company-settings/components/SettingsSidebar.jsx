@@ -1,10 +1,10 @@
 import React from "react";
-import axios from "axios";
+import axiosInstance from '../../../../../api/axiosInstance';
 
 export default function SettingsSidebar({ activeSection, onSectionChange }) {
   const handleLogout = async () => {
     try {
-      await axios.get("/api/logout", {}, { withCredentials: true });
+      await axiosInstance.get("/api/logout", {}, { withCredentials: true });
       window.location.href = "/";
     } catch (error) {
       console.error("Logout error:", error);

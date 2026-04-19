@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchCustomerProfile } from "../../../../store/slices/customerProfileSlice";
-import axios from "axios";
+import axiosInstance from '../../../../api/axiosInstance';
 import CustomerPageLoader from "../common/CustomerPageLoader";
 import {
   clearDraft,
@@ -138,7 +138,7 @@ const InteriorDesignForm = () => {
     const fetchEditableRequest = async () => {
       try {
         setLoadingExistingRequest(true);
-        const res = await axios.get(
+        const res = await axiosInstance.get(
           `/api/customer/editable-request/interior/${editId}`,
           { withCredentials: true },
         );
@@ -227,7 +227,7 @@ const InteriorDesignForm = () => {
     const fetchWorkerDetails = async () => {
       try {
         setWorkerDetailsLoading(true);
-        const res = await axios.get("/api/interior_designer", {
+        const res = await axiosInstance.get("/api/interior_designer", {
           withCredentials: true,
         });
         const designers = res.data?.designers || [];

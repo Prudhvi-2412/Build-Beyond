@@ -1,7 +1,7 @@
 // src/Pages/customer/components/customer-navbar/CustomerNavbar.jsx
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import axios from "axios";
+import axiosInstance from '../../../../api/axiosInstance';
 import Dropdown from "./sub-components/Dropdown";
 import NotificationIcon from "./sub-components/NotificationIcon";
 import "./CustomerNavbar.css";
@@ -402,12 +402,12 @@ const CustomerNavbar = () => {
       try {
         const [jobStatusRes, ongoingRes, paymentRes, messagesRes] =
           await Promise.allSettled([
-            axios.get("/api/job_status", { withCredentials: true }),
-            axios.get("/api/ongoing_projects", { withCredentials: true }),
-            axios.get("/api/customer/payment-history", {
+            axiosInstance.get("/api/job_status", { withCredentials: true }),
+            axiosInstance.get("/api/ongoing_projects", { withCredentials: true }),
+            axiosInstance.get("/api/customer/payment-history", {
               withCredentials: true,
             }),
-            axios.get("/api/customer/unviewed-company-messages", {
+            axiosInstance.get("/api/customer/unviewed-company-messages", {
               withCredentials: true,
             }),
           ]);

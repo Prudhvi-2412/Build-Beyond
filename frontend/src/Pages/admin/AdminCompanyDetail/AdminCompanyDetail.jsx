@@ -21,6 +21,9 @@ import { useAdminAuth } from "../../../context/AdminAuthContext";
 import "../AdminCustomerDetail/AdminCustomerDetail.css";
 import "./AdminCompanyDetail.css";
 
+const _API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+
+
 const getDocumentUrl = (path) => {
   if (!path) return "";
   if (path.startsWith("http")) return path;
@@ -169,7 +172,7 @@ const AdminCompanyDetail = () => {
     const fetchCompanyFull = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`/api/admin/companies/${id}/full`, {
+        const response = await fetch(`${_API_BASE}/api/admin/companies/${id}/full`, {
           credentials: "include",
         });
         const json = await response.json();

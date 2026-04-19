@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchCustomerProfile } from "../../../../store/slices/customerProfileSlice";
-import axios from "axios";
+import axiosInstance from '../../../../api/axiosInstance';
 import CustomerPageLoader from "../common/CustomerPageLoader";
 import {
   clearDraft,
@@ -97,7 +97,7 @@ const ArchitectForm = () => {
     const fetchEditableRequest = async () => {
       try {
         setLoadingExistingRequest(true);
-        const res = await axios.get(
+        const res = await axiosInstance.get(
           `/api/customer/editable-request/architect/${editId}`,
           { withCredentials: true },
         );
@@ -153,7 +153,7 @@ const ArchitectForm = () => {
     const fetchWorkerDetails = async () => {
       try {
         setWorkerDetailsLoading(true);
-        const res = await axios.get("/api/architect", {
+        const res = await axiosInstance.get("/api/architect", {
           withCredentials: true,
         });
         const workers = res.data?.architects || [];

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import axios from "axios";
+import axiosInstance from '../../../../api/axiosInstance';
 import CustomerPageLoader from "../common/CustomerPageLoader";
 import {
   readFavoritesByType,
@@ -27,8 +27,8 @@ const CustomerInterior = () => {
     const loadDesignerData = async () => {
       try {
         const [designerRes, statusRes] = await Promise.allSettled([
-          axios.get("/api/interior_designer"),
-          axios.get("/api/job_status", { withCredentials: true }),
+          axiosInstance.get("/api/interior_designer"),
+          axiosInstance.get("/api/job_status", { withCredentials: true }),
         ]);
 
         if (designerRes.status === "fulfilled") {

@@ -8,6 +8,8 @@ import "./LoginSignUp.css";
 const OTP_LENGTH = 6;
 const GOOGLE_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+
 
 const LoginSignUp = () => {
   const navigate = useNavigate();
@@ -143,7 +145,7 @@ const LoginSignUp = () => {
 
   const checkSession = async () => {
     try {
-      const res = await fetch("/api/session", { credentials: "include" });
+      const res = await fetch(`${API_BASE}/api/session`, { credentials: "include" });
       const data = await res.json();
       if (data.authenticated) {
         const role = data.user.role;
@@ -381,7 +383,7 @@ const LoginSignUp = () => {
     e.preventDefault();
     if (!validateSignin()) return;
     try {
-      const res = await fetch("/api/login", {
+      const res = await fetch(`${API_BASE}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -417,7 +419,7 @@ const LoginSignUp = () => {
     }
 
     try {
-      const res = await fetch("/api/login/google", {
+      const res = await fetch(`${API_BASE}/api/login/google`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -468,7 +470,7 @@ const LoginSignUp = () => {
     files.forEach((file) => formData.append("documents", file));
 
     try {
-      const res = await fetch("/api/signup", {
+      const res = await fetch(`${API_BASE}/api/signup`, {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -485,7 +487,7 @@ const LoginSignUp = () => {
   const startSignupCooldown = () => setSignupResendSeconds(30);
 
   const sendOtpRequest = async ({ email, purpose }) => {
-    const res = await fetch("/api/email-otp/send", {
+    const res = await fetch(`${API_BASE}/api/email-otp/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -497,7 +499,7 @@ const LoginSignUp = () => {
   };
 
   const verifyOtpRequest = async ({ email, otpCode, purpose }) => {
-    const res = await fetch("/api/email-otp/verify", {
+    const res = await fetch(`${API_BASE}/api/email-otp/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -563,7 +565,7 @@ const LoginSignUp = () => {
       return;
     }
     try {
-      const res = await fetch("/api/reset-password", {
+      const res = await fetch(`${API_BASE}/api/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -653,7 +655,7 @@ const LoginSignUp = () => {
 
   const handleVerifySigninOtp = async () => {
     try {
-      const res = await fetch("/api/login/2fa/verify", {
+      const res = await fetch(`${API_BASE}/api/login/2fa/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -680,7 +682,7 @@ const LoginSignUp = () => {
     e.preventDefault();
     if (signinResendSeconds > 0) return;
     try {
-      const res = await fetch("/api/login/2fa/resend", {
+      const res = await fetch(`${API_BASE}/api/login/2fa/resend`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

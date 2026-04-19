@@ -4,6 +4,9 @@ import DetailsModal from "./components/DetailsModal";
 import ProposalModal from "./components/ProposalModal";
 import "./CompanyProjectRequests.css";
 
+const _API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+
+
 const CompanyProjectRequests = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,7 +29,7 @@ const CompanyProjectRequests = () => {
   const fetchProjects = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/project_requests", {
+      const res = await fetch(`${_API_BASE}/api/project_requests`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch project requests");

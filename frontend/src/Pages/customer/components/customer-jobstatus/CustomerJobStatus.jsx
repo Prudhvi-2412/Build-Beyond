@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import axiosInstance from '../../../../api/axiosInstance';
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import "./CustomerJobStatus.css";
 import ReviewModal from "../../../../components/ReviewModal/ReviewModal";
@@ -85,7 +85,7 @@ const CustomerJobStatus = () => {
 
   const fetchJobStatus = async () => {
     try {
-      const res = await axios.get("/api/job_status", {
+      const res = await axiosInstance.get("/api/job_status", {
         withCredentials: true,
       });
       const data = res.data;
@@ -299,7 +299,7 @@ const CustomerJobStatus = () => {
     projectType,
   ) => {
     try {
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         `/api/customer/milestone/approve/${projectId}/${milestoneId}`,
         { projectType },
         { withCredentials: true },
@@ -323,7 +323,7 @@ const CustomerJobStatus = () => {
   const handleRejectMilestone = async (projectId, milestoneId, projectType) => {
     const reason = prompt("Please provide a reason for rejection (optional):");
     try {
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         `/api/customer/milestone/reject/${projectId}/${milestoneId}`,
         { projectType, reason },
         { withCredentials: true },
@@ -355,7 +355,7 @@ const CustomerJobStatus = () => {
     }
 
     try {
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         `/api/customer/milestone/request-revision/${revisionModal.projectId}/${revisionModal.milestoneId}`,
         {
           projectType: revisionModal.projectType,
@@ -400,7 +400,7 @@ const CustomerJobStatus = () => {
     }
 
     try {
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         `/api/customer/milestone/report-to-admin/${projectId}/${milestoneId}`,
         { projectType, reportReason },
         { withCredentials: true },
@@ -446,7 +446,7 @@ const CustomerJobStatus = () => {
   // Submit review
   const handleSubmitReview = async ({ rating, comment }) => {
     try {
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         "/api/customer/review",
         {
           projectId: reviewModal.projectId,
@@ -744,7 +744,7 @@ const CustomerJobStatus = () => {
         endpoint = `/api/customer/accept-proposal/${type}/${projectId}`;
       }
 
-      const res = await axios.get(endpoint, { withCredentials: true });
+      const res = await axiosInstance.get(endpoint, { withCredentials: true });
 
       if (res.data.success) {
         alert(
@@ -776,7 +776,7 @@ const CustomerJobStatus = () => {
         endpoint = `/api/customer/reject-proposal/${type}/${projectId}`;
       }
 
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         endpoint,
         { reason },
         { withCredentials: true },

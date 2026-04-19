@@ -22,6 +22,9 @@ import { useAdminAuth } from "../../../context/AdminAuthContext";
 import "../AdminCustomerDetail/AdminCustomerDetail.css";
 import "./AdminWorkerDetail.css";
 
+const _API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+
+
 const getDocumentUrl = (path) => {
   if (!path) return "";
   if (path.startsWith("http")) return path;
@@ -144,7 +147,7 @@ const AdminWorkerDetail = () => {
     const fetchWorkerFull = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`/api/admin/workers/${id}/full`, {
+        const response = await fetch(`${_API_BASE}/api/admin/workers/${id}/full`, {
           credentials: "include",
         });
         const json = await response.json();

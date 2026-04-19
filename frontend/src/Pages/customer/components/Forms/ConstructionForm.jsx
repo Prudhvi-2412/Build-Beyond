@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchCustomerProfile } from "../../../../store/slices/customerProfileSlice";
-import axios from "axios";
+import axiosInstance from '../../../../api/axiosInstance';
 import "./ConstructionForm.css";
 import { useValidation } from "../../../../context/ValidationContext";
 import CustomerPageLoader from "../common/CustomerPageLoader";
@@ -113,7 +113,7 @@ const ConstructionForm = () => {
     const fetchEditableRequest = async () => {
       try {
         setLoadingExistingRequest(true);
-        const res = await axios.get(
+        const res = await axiosInstance.get(
           `/api/customer/editable-request/company/${editId}`,
           {
             withCredentials: true,
@@ -215,7 +215,7 @@ const ConstructionForm = () => {
     const fetchCompanyDetails = async () => {
       try {
         setCompanyDetailsLoading(true);
-        const res = await axios.get("/api/construction_companies_list", {
+        const res = await axiosInstance.get("/api/construction_companies_list", {
           withCredentials: true,
         });
         const companies = res.data?.companies || [];

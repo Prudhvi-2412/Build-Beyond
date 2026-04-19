@@ -1,6 +1,6 @@
 // src/Pages/customer/components/customer-payments/CustomerPaymentHistory.jsx
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import axiosInstance from '../../../../api/axiosInstance';
 import { useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import CustomerPageLoader from "../common/CustomerPageLoader";
@@ -54,7 +54,7 @@ const CustomerPaymentHistory = () => {
     try {
       setLoading(true);
       // Fetch customer's payment transactions
-      const res = await axios.get("/api/customer/payment-history", {
+      const res = await axiosInstance.get("/api/customer/payment-history", {
         withCredentials: true,
       });
 

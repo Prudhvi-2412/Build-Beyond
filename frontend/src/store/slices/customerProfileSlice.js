@@ -1,11 +1,11 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import axiosInstance from '../../api/axiosInstance';
 
 export const fetchCustomerProfile = createAsyncThunk(
   'customerProfile/fetchProfile',
   async (_, thunkAPI) => {
     try {
-      const res = await axios.get('/api/customer/profile', { withCredentials: true });
+      const res = await axiosInstance.get('/api/customer/profile');
       return res.data;
     } catch (err) {
       return thunkAPI.rejectWithValue(err.response?.data || 'Error fetching profile');

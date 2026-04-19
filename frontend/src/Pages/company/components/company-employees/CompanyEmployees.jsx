@@ -4,12 +4,15 @@ import EmployeesHeader from "./components/EmployeesHeader";
 import EmployeesGrid from "./components/EmployeesGrid";
 import LoadingOrEmpty from "./components/LoadingOrEmpty";
 
+const _API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+
+
 const CompanyEmployees = () => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/my-employees", {
+    fetch(`${_API_BASE}/api/my-employees`, {
       method: "GET",
       credentials: "include"
     })

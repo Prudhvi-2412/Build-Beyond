@@ -8,6 +8,9 @@ import ProjectsList from "./components/ProjectsList";
 import ProjectDetails from "./components/ProjectDetails";
 import BidStatusList from "./components/BidStatusList";
 
+const _API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+
+
 const CompanyBids = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -53,7 +56,7 @@ const CompanyBids = () => {
     const load = async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/companybids", {
+        const res = await fetch(`${_API_BASE}/api/companybids`, {
           credentials: "include",
         });
 
@@ -127,7 +130,7 @@ const CompanyBids = () => {
     }
 
     try {
-      const res = await fetch("/api/submit-bid", {
+      const res = await fetch(`${_API_BASE}/api/submit-bid`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

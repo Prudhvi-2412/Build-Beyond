@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import axios from "axios";
+import axiosInstance from '../../../../api/axiosInstance';
 import CustomerPageLoader from "../common/CustomerPageLoader";
 import {
   readFavoritesByType,
@@ -27,8 +27,8 @@ const CustomerArchitect = () => {
     const loadArchitectData = async () => {
       try {
         const [architectRes, statusRes] = await Promise.allSettled([
-          axios.get("/api/architect"),
-          axios.get("/api/job_status", { withCredentials: true }),
+          axiosInstance.get("/api/architect"),
+          axiosInstance.get("/api/job_status", { withCredentials: true }),
         ]);
 
         if (architectRes.status === "fulfilled") {

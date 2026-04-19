@@ -1,7 +1,7 @@
 // src/Pages/customer/components/customer-payments/PaymentCheckout.jsx
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import axios from "axios";
+import axiosInstance from '../../../../api/axiosInstance';
 import CustomerPageLoader from "../common/CustomerPageLoader";
 import "./PaymentCheckout.css";
 
@@ -46,7 +46,7 @@ const PaymentCheckout = () => {
           ? `/api/architect-hiring/${projectId}`
           : `/api/design-request/${projectId}`;
 
-      const res = await axios.get(endpoint, { withCredentials: true });
+      const res = await axiosInstance.get(endpoint, { withCredentials: true });
       setProject(res.data);
     } catch (err) {
       setError("Failed to load project details");
@@ -184,7 +184,7 @@ const PaymentCheckout = () => {
         }),
       };
 
-      const orderRes = await axios.post(
+      const orderRes = await axiosInstance.post(
         "/api/payment/worker/create-order",
         orderPayload,
         { withCredentials: true },
@@ -214,7 +214,7 @@ const PaymentCheckout = () => {
               razorpay_signature: response.razorpay_signature,
             };
 
-            const verifyRes = await axios.post(
+            const verifyRes = await axiosInstance.post(
               "/api/payment/worker/verify-payment",
               verifyPayload,
               { withCredentials: true },
@@ -273,7 +273,7 @@ const PaymentCheckout = () => {
         }),
       };
 
-      const testRes = await axios.post(
+      const testRes = await axiosInstance.post(
         "/api/payment/worker/test-mark-paid",
         payload,
         {

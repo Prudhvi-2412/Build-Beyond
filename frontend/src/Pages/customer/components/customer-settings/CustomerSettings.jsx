@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import axiosInstance from '../../../../api/axiosInstance';
 import { useNavigate } from "react-router-dom";
 import CustomerPageLoader from "../common/CustomerPageLoader";
 import "./CustomerSettings.css";
@@ -24,7 +24,7 @@ const CustomerSettings = () => {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const res = await axios.get("/api/customersettings", {
+        const res = await axiosInstance.get("/api/customersettings", {
           withCredentials: true,
         });
         const user = res.data.user || {};
@@ -38,7 +38,7 @@ const CustomerSettings = () => {
         setProfile(fetchedProfile);
         setOriginalEmail(fetchedProfile.email);
 
-        const twoFactorRes = await axios.get("/api/2fa/status", {
+        const twoFactorRes = await axiosInstance.get("/api/2fa/status", {
           withCredentials: true,
         });
         setTwoFactorEnabled(Boolean(twoFactorRes?.data?.twoFactorEnabled));
@@ -80,7 +80,7 @@ const CustomerSettings = () => {
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post("/api/customersettings/update", profile, {
+      await axiosInstance.post("/api/customersettings/update", profile, {
         withCredentials: true,
       });
       alert("Profile updated successfully!");
@@ -112,7 +112,7 @@ const CustomerSettings = () => {
     }
 
     try {
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         "/api/customer/password/update",
         { currentPassword, newPassword },
         { withCredentials: true },
@@ -131,7 +131,7 @@ const CustomerSettings = () => {
     setUpdatingTwoFactor(true);
     try {
       const targetValue = !twoFactorEnabled;
-      const res = await axios.put(
+      const res = await axiosInstance.put(
         "/api/2fa/status",
         { enabled: targetValue },
         { withCredentials: true },
@@ -149,7 +149,7 @@ const CustomerSettings = () => {
   const handleLogout = async (e) => {
     e.preventDefault();
     try {
-      await axios.get("/api/logout", {}, { withCredentials: true });
+      await axiosInstance.get("/api/logout", {}, { withCredentials: true });
     } catch (err) {
       console.error("Logout API failed, proceeding anyway:", err);
     } finally {

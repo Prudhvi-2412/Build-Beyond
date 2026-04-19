@@ -6,6 +6,9 @@ import ProfileSection from "./components/ProfileSection";
 import SecuritySection from "./components/SecuritySection";
 import HelpSection from "./components/HelpSection";
 
+const _API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+
+
 const API_GET = "/api/companysettings";
 const API_POST_UPDATE = "/api/update-company-profile";
 

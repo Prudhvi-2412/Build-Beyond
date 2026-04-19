@@ -24,6 +24,9 @@ import { useAdminAuth } from "../../../context/AdminAuthContext";
 import "../AdminCustomerDetail/AdminCustomerDetail.css";
 import "./AdminDesignRequestDetail.css";
 
+const _API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+
+
 const BACKEND_BASE_URL = "";
 
 const formatCurrency = (value) =>
@@ -143,7 +146,7 @@ const AdminDesignRequestDetail = () => {
     const fetchFullProject = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`/api/admin/design-requests/${id}/full`, {
+        const response = await fetch(`${_API_BASE}/api/admin/design-requests/${id}/full`, {
           credentials: "include",
         });
         const json = await response.json();

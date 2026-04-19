@@ -1,6 +1,6 @@
 // src/Pages/customer/components/customer-payments/CompanyPaymentModal.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import axiosInstance from '../../../../api/axiosInstance';
 import './CompanyPaymentModal.css';
 
 const INITIAL_RELEASE_PERCENT = 75;
@@ -114,7 +114,7 @@ const CompanyPaymentModal = ({ isOpen, onClose, onSuccess, project, milestonePer
 
     try {
       // 1. Create Razorpay order
-      const orderRes = await axios.post(
+      const orderRes = await axiosInstance.post(
         '/api/payment/company/create-order',
         { projectId: project._id, milestonePercentage },
         { withCredentials: true }
@@ -142,7 +142,7 @@ const CompanyPaymentModal = ({ isOpen, onClose, onSuccess, project, milestonePer
         handler: async (response) => {
           try {
             // 3. Verify payment with backend
-            const verifyRes = await axios.post(
+            const verifyRes = await axiosInstance.post(
               '/api/payment/company/verify-payment',
               {
                 projectId: project._id,
@@ -197,7 +197,7 @@ const CompanyPaymentModal = ({ isOpen, onClose, onSuccess, project, milestonePer
     setStep('processing');
 
     try {
-      const testRes = await axios.post(
+      const testRes = await axiosInstance.post(
         '/api/payment/company/test-mark-paid',
         {
           projectId: project._id,
