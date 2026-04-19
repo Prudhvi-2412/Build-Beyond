@@ -98,11 +98,11 @@ app.get("/adminpage", (req, res) => {
 });
 
 app.get("/logout", (req, res) => {
-  const isProduction = process.env.NODE_ENV === "production";
+  const isSecureEnv = process.env.NODE_ENV === "production" || process.env.RENDER === "true";
   res.clearCookie("token", {
     httpOnly: true,
-    sameSite: isProduction ? "none" : "lax",
-    secure: isProduction,
+    sameSite: isSecureEnv ? "none" : "lax",
+    secure: isSecureEnv,
     path: "/",
   });
   res.status(200).json({ redirect: "/" });

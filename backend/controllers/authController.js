@@ -18,13 +18,17 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const googleOAuthClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 const isProduction = process.env.NODE_ENV === 'production';
+// Use secure cross-origin cookie settings when on Render (HTTPS) or production.
+// Render always sets RENDER=true in its environment.
+const isSecureEnv = isProduction || process.env.RENDER === 'true';
 const authCookieOptions = {
   httpOnly: true,
-  secure: isProduction,
+  secure: isSecureEnv,
   maxAge: 1000 * 60 * 60 * 24,
-  sameSite: isProduction ? 'none' : 'lax',
+  sameSite: isSecureEnv ? 'none' : 'lax',
   path: '/',
 };
+
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 const normalizeRole = (role) => String(role || '').trim().toLowerCase();
