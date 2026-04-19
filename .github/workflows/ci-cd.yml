@@ -126,7 +126,6 @@ jobs:
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
           VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
-          BACKEND_HEALTHCHECK_URL: ${{ secrets.BACKEND_HEALTHCHECK_URL }}
         run: |
           if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
             echo "Missing secret: RENDER_DEPLOY_HOOK_URL"
@@ -134,10 +133,6 @@ jobs:
           fi
           if [ -z "$VERCEL_DEPLOY_HOOK_URL" ]; then
             echo "Missing secret: VERCEL_DEPLOY_HOOK_URL"
-            exit 1
-          fi
-          if [ -z "$BACKEND_HEALTHCHECK_URL" ]; then
-            echo "Missing secret: BACKEND_HEALTHCHECK_URL"
             exit 1
           fi
 
@@ -161,6 +156,7 @@ jobs:
         env:
           BACKEND_HEALTHCHECK_URL: ${{ secrets.BACKEND_HEALTHCHECK_URL }}
         run: |
+          BACKEND_HEALTHCHECK_URL="${BACKEND_HEALTHCHECK_URL:-https://build-beyond.onrender.com/health}"
           max_attempts=20
           sleep_seconds=15
           attempt=1
