@@ -46,6 +46,9 @@ const corsOriginValidator = (origin, callback) => {
   // Allow same-origin/server-to-server calls where Origin header may be absent.
   if (!origin) return callback(null, true);
   if (allowedOrigins.has(origin)) return callback(null, true);
+  // Allow any vercel preview URL or the main vercel url
+  if (origin.endsWith('.vercel.app')) return callback(null, true);
+  // Optional: you can add other domains here if needed
   return callback(new Error(`CORS blocked for origin: ${origin}`));
 };
 
