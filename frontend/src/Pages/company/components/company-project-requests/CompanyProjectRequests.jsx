@@ -26,7 +26,7 @@ const CompanyProjectRequests = () => {
   const fetchProjects = async () => {
     try {
       setLoading(true);
-      const res = await fetch("https://build-beyond.onrender.com/api/project_requests", {
+      const res = await fetch("/api/project_requests", {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch project requests");
@@ -142,7 +142,7 @@ const CompanyProjectRequests = () => {
       };
 
       const res = await fetch(
-        "https://build-beyond.onrender.com/api/company/submit-proposal",
+        "/api/company/submit-proposal",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -172,7 +172,7 @@ const CompanyProjectRequests = () => {
 
     try {
       const res = await fetch(
-        `https://build-beyond.onrender.com/api/projects/${projectId}/rejected`,
+        `/api/projects/${projectId}/rejected`,
         {
           method: "PATCH",
           credentials: "include",

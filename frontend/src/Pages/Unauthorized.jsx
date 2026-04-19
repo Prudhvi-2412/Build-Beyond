@@ -19,7 +19,7 @@ const Unauthorized = () => {
 
   useEffect(() => {
     // Log unauthorized access to backend
-    fetch("https://build-beyond.onrender.com/api/log-client-error", {
+    fetch("/api/log-client-error", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

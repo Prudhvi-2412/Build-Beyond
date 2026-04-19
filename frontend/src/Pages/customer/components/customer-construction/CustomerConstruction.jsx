@@ -571,12 +571,12 @@ const CustomerConstruction = () => {
                                     (img, imgIdx) => (
                                       <img
                                         key={imgIdx}
-                                        src={`https://build-beyond.onrender.com/${img}`}
+                                        src={`/${img}`}
                                         alt={`Completion ${imgIdx + 1}`}
                                         className="completion-image"
                                         onClick={() =>
                                           window.open(
-                                            `https://build-beyond.onrender.com/${img}`,
+                                            `/${img}`,
                                             "_blank",
                                           )
                                         }

@@ -1076,7 +1076,7 @@ const CustomerOngoing = () => {
                                       }
                                       onClick={() =>
                                         window.open(
-                                          `https://build-beyond.onrender.com/${img}`,
+                                          `/${img}`,
                                           "_blank",
                                         )
                                       }
