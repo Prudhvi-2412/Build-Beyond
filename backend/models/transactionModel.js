@@ -1,18 +1,18 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const transactionSchema = new mongoose.Schema(
   {
     transactionType: {
       type: String,
       enum: [
-        'escrow_hold',
-        'milestone_release',
-        'worker_withdrawal',
-        'platform_commission',
-        'platform_fee_due',
-        'platform_fee_collection',
-        'refund',
-        'subscription_fee',
+        "escrow_hold",
+        "milestone_release",
+        "worker_withdrawal",
+        "platform_commission",
+        "platform_fee_due",
+        "platform_fee_collection",
+        "refund",
+        "subscription_fee",
       ],
       required: true,
     },
@@ -21,23 +21,26 @@ const transactionSchema = new mongoose.Schema(
     netAmount: { type: Number, required: true },
 
     projectId: { type: mongoose.Schema.Types.ObjectId },
-    projectType: { type: String, enum: ['architect', 'interior', 'construction', 'bid'] },
-    workerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Worker' },
-    customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
-    companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
+    projectType: {
+      type: String,
+      enum: ["architect", "interior", "construction", "bid"],
+    },
+    workerId: { type: mongoose.Schema.Types.ObjectId, ref: "Worker" },
+    customerId: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
+    companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company" },
 
     milestonePercentage: { type: Number, enum: [25, 50, 75, 100] },
 
     status: {
       type: String,
-      enum: ['pending', 'completed', 'failed', 'refunded'],
-      default: 'pending',
+      enum: ["pending", "completed", "failed", "refunded"],
+      default: "pending",
     },
 
     paymentMethod: {
       type: String,
-      enum: ['stripe', 'razorpay', 'bank_transfer', 'wallet'],
-      default: 'razorpay',
+      enum: ["stripe", "razorpay", "bank_transfer", "wallet"],
+      default: "razorpay",
     },
     stripePaymentIntentId: { type: String },
     stripeSessionId: { type: String },
@@ -61,10 +64,18 @@ const transactionSchema = new mongoose.Schema(
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 transactionSchema.index({ workerId: 1, createdAt: -1 });
+transactionSchema.index({ workerId: 1, status: 1, createdAt: -1 });
+transactionSchema.index({ workerId: 1, transactionType: 1, createdAt: -1 });
+transactionSchema.index({
+  workerId: 1,
+  status: 1,
+  transactionType: 1,
+  createdAt: -1,
+});
 transactionSchema.index({ companyId: 1, createdAt: -1 });
 transactionSchema.index({ customerId: 1, createdAt: -1 });
 transactionSchema.index({ projectId: 1 });
@@ -75,4 +86,4 @@ transactionSchema.index({ createdAt: 1 });
 
 module.exports =
   mongoose.models.Transaction ||
-  mongoose.model('Transaction', transactionSchema);
+  mongoose.model("Transaction", transactionSchema);
