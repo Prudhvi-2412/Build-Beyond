@@ -597,7 +597,7 @@ const ConstructionForm = () => {
     try {
       const endpoint = isEditMode
         ? `/api/customer/editable-request/company/${editId}`
-        : "/api/construction_form";
+        : "/api/constructionform";
       const method = isEditMode ? "put" : "post";
 
       floors.forEach((floor) => {
@@ -613,7 +613,6 @@ const ConstructionForm = () => {
         method,
         url: endpoint,
         data: submitData,
-        headers: { "Content-Type": "multipart/form-data" },
         withCredentials: true,
       });
 
