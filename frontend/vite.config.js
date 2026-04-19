@@ -6,6 +6,12 @@ const backendTarget = process.env.VITE_BACKEND_TARGET || "http://localhost:3000"
 
 export default defineConfig({
   plugins: [react()],
+  test: {
+    environment: "jsdom",
+    setupFiles: "./src/test/setupTests.js",
+    globals: true,
+    include: ["src/**/*.test.{js,jsx}"],
+  },
   server: {
     port: 5173,
     proxy: {

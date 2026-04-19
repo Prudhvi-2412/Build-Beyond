@@ -270,7 +270,7 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test tests/**/*.test.js",
     "sync:indexes": "node scripts/sync-indexes.js",
     "sync:indexes:dry-run": "node scripts/sync-indexes.js --dry-run",
     "sync:indexes:full": "node scripts/sync-indexes.js --full-sync",

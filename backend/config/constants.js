@@ -32,4 +32,5 @@ module.exports = {
   REDIS_ENABLED: process.env.REDIS_ENABLED || 'true',
   REDIS_DEFAULT_TTL_SECONDS: Number(process.env.REDIS_DEFAULT_TTL_SECONDS || 120),
   REDIS_CACHE_LOG_EVERY_N: Number(process.env.REDIS_CACHE_LOG_EVERY_N || 0),
+  parseOrigins,
 };
