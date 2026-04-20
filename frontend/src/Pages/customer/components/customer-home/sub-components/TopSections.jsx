@@ -14,7 +14,7 @@ const TopSections = () => {
             commercial space.
           </p>
           <a href="#services" className="cta_btn">
-            Explore Our Services
+            Explore Services
           </a>
         </div>
       </section>
