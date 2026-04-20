@@ -13,7 +13,7 @@ import FileUploadGroup from './components/FileUploadGroup';
 import CompletionImagesUpload from './components/CompletionImagesUpload';
 import RecentUpdates from './components/RecentUpdates';
 import FormButtons from './components/FormButtons';
-import API_BASE from "../../../../../../api/backendBase";
+import API_BASE from "../../../../../api/backendBase";
 
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
