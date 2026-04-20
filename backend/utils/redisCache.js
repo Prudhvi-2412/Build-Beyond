@@ -46,6 +46,34 @@ const buildCacheKey = (prefix, params = {}) => {
   return `${prefix}:${normalized}`;
 };
 
+const getElapsedMs = (startedAt) => {
+  if (!startedAt) return null;
+  try {
+    if (typeof startedAt === 'bigint') {
+      return Number((Number(process.hrtime.bigint() - startedAt) / 1e6).toFixed(3));
+    }
+
+    if (typeof startedAt === 'number') {
+      return Number((Date.now() - startedAt).toFixed(3));
+    }
+
+    return null;
+  } catch (_error) {
+    return null;
+  }
+};
+
+const logRedisEndpointCache = (status, endpoint, startedAt) => {
+  if (!endpoint) return;
+
+  const normalizedStatus = String(status || '').trim().toLowerCase();
+  if (!['hit', 'miss'].includes(normalizedStatus)) return;
+
+  const elapsedMs = getElapsedMs(startedAt);
+  const elapsedText = elapsedMs === null ? 'na' : `${elapsedMs}`;
+  console.log(`{${normalizedStatus}} ${endpoint} : ${elapsedText}ms`);
+};
+
 const getCacheJson = async (key) => {
   const redis = getRedisClient();
   if (!redis) {
@@ -160,6 +188,7 @@ module.exports = {
   buildCacheKey,
   getCacheJson,
   setCacheJson,
+  logRedisEndpointCache,
   invalidateCacheByPrefix,
   getRedisCacheStats,
   resetRedisCacheStats,

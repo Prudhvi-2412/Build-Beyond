@@ -45,15 +45,13 @@ if (typeof window !== "undefined" && !window.__apiBaseFetchPatched__) {
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    <Provider store={store}>
-      <BrowserRouter>
-        <ValidationProvider>
-          <GlobalChatProvider>
-            <App />
-          </GlobalChatProvider>
-        </ValidationProvider>
-      </BrowserRouter>
-    </Provider>
-  </React.StrictMode>,
+  <Provider store={store}>
+    <BrowserRouter>
+      <ValidationProvider>
+        <GlobalChatProvider>
+          <App />
+        </GlobalChatProvider>
+      </ValidationProvider>
+    </BrowserRouter>
+  </Provider>,
 );

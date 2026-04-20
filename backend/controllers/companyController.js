@@ -3,10 +3,17 @@ const bcrypt = require('bcrypt');
 const { Company, Bid, ConstructionProjectSchema, Worker, WorkerToCompany, CompanytoWorker } = require('../models');
 const { getTargetDate } = require('../utils/helpers');
 const { findOrCreateChatRoom } = require('./chatController');
-const { invalidateCacheByPrefix } = require('../utils/redisCache');
+const {
+  buildCacheKey,
+  getCacheJson,
+  setCacheJson,
+  logRedisEndpointCache,
+  invalidateCacheByPrefix,
+} = require('../utils/redisCache');
 
 const ADMIN_REVENUE_INTELLIGENCE_CACHE_PREFIX = 'admin:platform-revenue-intelligence:v1';
 const ADMIN_ANALYTICS_CACHE_PREFIX = 'admin:analytics:v1';
+const COMPANY_ONGOING_CACHE_PREFIX = 'company:ongoing-projects:v1';
 
 const invalidateAdminRevenueIntelligenceCache = async () => {
   try {
@@ -16,6 +23,17 @@ const invalidateAdminRevenueIntelligenceCache = async () => {
     ]);
   } catch (error) {
     console.error('Failed to invalidate admin revenue intelligence cache:', error.message);
+  }
+};
+
+const invalidateCompanyOngoingProjectsCache = async (companyId) => {
+  try {
+    if (!companyId) return;
+    await invalidateCacheByPrefix(
+      buildCacheKey(COMPANY_ONGOING_CACHE_PREFIX, { companyId }),
+    );
+  } catch (error) {
+    console.error('Failed to invalidate company ongoing projects cache:', error.message);
   }
 };
 
@@ -154,6 +172,7 @@ const uploadPlatformFeeInvoice = async (req, res) => {
     payout.platformFeeInvoiceUploadedAt = new Date();
     await project.save();
 
+    await invalidateCompanyOngoingProjectsCache(companyId);
     await invalidateAdminRevenueIntelligenceCache();
 
     return res.json({
@@ -194,8 +213,18 @@ const getDashboard = async (req, res) => {
 
 const getOngoingProjects = async (req, res) => {
   try {
+    const startedAt = process.hrtime.bigint();
     const companyId = req.user.user_id;
     if (!companyId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const cacheKey = buildCacheKey(COMPANY_ONGOING_CACHE_PREFIX, {
+      companyId,
+    });
+    const cachedPayload = await getCacheJson(cacheKey);
+    if (cachedPayload) {
+      logRedisEndpointCache('hit', req.originalUrl, startedAt);
+      return res.status(200).json(cachedPayload);
+    }
 
     const projects = await ConstructionProjectSchema.find({ companyId, status: 'accepted' });
     const totalActiveProjects = projects.length;
@@ -215,8 +244,12 @@ const getOngoingProjects = async (req, res) => {
       return projectObj;
     });
 
+    const responsePayload = { projects: enhancedProjects, metrics };
+    await setCacheJson(cacheKey, responsePayload, 90);
+    logRedisEndpointCache('miss', req.originalUrl, startedAt);
+
     // routed file : company/company_ongoing_projects
-    res.status(200).json({ projects: enhancedProjects, metrics });
+    res.status(200).json(responsePayload);
   } catch (error) {
     console.error('Error fetching projects:', error);
     res.status(500).json({ error: 'Server error' });
@@ -254,6 +287,7 @@ const updateProjectStatusController = async (req, res) => {
       return res.status(404).json({ error: 'Project not found or you do not have permission to update it.' });
     }
 
+    await invalidateCompanyOngoingProjectsCache(user_id);
     res.status(200).json({ message: 'Project status updated successfully', project: updatedProject });
   } catch (error) {
     console.error('Error updating project status:', error);
@@ -729,6 +763,7 @@ const submitProjectProposal = async (req, res) => {
     };
 
     await project.save();
+    await invalidateCompanyOngoingProjectsCache(companyId);
     res.status(200).json({ success: true, message: 'Proposal submitted', redirect: '/project_requests' });
   } catch (error) {
     console.error('Error submitting proposal:', error);

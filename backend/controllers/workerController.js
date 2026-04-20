@@ -11,6 +11,29 @@ const mongoose = require("mongoose");
 const ChatRoom = require("../models/chatModel");
 const { findOrCreateChatRoom } = require("./chatController");
 const bcrypt = require("bcrypt");
+const {
+  buildCacheKey,
+  getCacheJson,
+  setCacheJson,
+  logRedisEndpointCache,
+  invalidateCacheByPrefix,
+} = require("../utils/redisCache");
+
+const WORKER_ONGOING_CACHE_PREFIX = "worker:ongoing-projects:v1";
+
+const invalidateWorkerOngoingProjectsCache = async (workerId) => {
+  try {
+    if (!workerId) return;
+    await invalidateCacheByPrefix(
+      buildCacheKey(WORKER_ONGOING_CACHE_PREFIX, { workerId }),
+    );
+  } catch (error) {
+    console.error(
+      "Failed to invalidate worker ongoing projects cache:",
+      error.message,
+    );
+  }
+};
 
 const getJobs = async (req, res) => {
   try {
@@ -627,6 +650,8 @@ const updateJobStatus = async (req, res) => {
       await findOrCreateChatRoom(job._id, type);
     }
 
+    await invalidateWorkerOngoingProjectsCache(workerId);
+
     res.json({
       success: true,
       message: `Job has been ${status.toLowerCase()}.`,
@@ -639,7 +664,18 @@ const updateJobStatus = async (req, res) => {
 
 const getOngoingProjects = async (req, res) => {
   try {
+    const startedAt = process.hrtime.bigint();
     const workerId = req.user.user_id;
+
+    const cacheKey = buildCacheKey(WORKER_ONGOING_CACHE_PREFIX, {
+      workerId,
+    });
+    const cachedPayload = await getCacheJson(cacheKey);
+    if (cachedPayload) {
+      logRedisEndpointCache("hit", req.originalUrl, startedAt);
+      return res.status(200).json(cachedPayload);
+    }
+
     const worker = await Worker.findById(workerId).lean();
     if (!worker) {
       return res.status(404).json({ error: "Worker not found" });
@@ -694,12 +730,16 @@ const getOngoingProjects = async (req, res) => {
       );
     }
 
-    // routed file : worker/worker_ongoing_projects
-    res.status(200).json({
+    const responsePayload = {
       user: worker,
       projects: allProjects,
       activePage: "ongoing",
-    });
+    };
+    await setCacheJson(cacheKey, responsePayload, 90);
+    logRedisEndpointCache("miss", req.originalUrl, startedAt);
+
+    // routed file : worker/worker_ongoing_projects
+    res.status(200).json(responsePayload);
   } catch (error) {
     console.error("Error fetching ongoing projects:", error);
     res.status(500).json({ error: "Server Error" });
@@ -743,6 +783,7 @@ const postProjectUpdate = async (req, res) => {
 
     project.projectUpdates.unshift(newUpdate);
     await project.save();
+    await invalidateWorkerOngoingProjectsCache(workerId);
     res
       .status(200)
       .json({ success: true, redirect: "/worker/ongoing-projects" });
@@ -779,6 +820,7 @@ const markProjectAsCompleted = async (req, res) => {
     }
 
     await project.save();
+    await invalidateWorkerOngoingProjectsCache(workerId);
     res
       .status(200)
       .json({ success: true, redirect: "/worker/ongoing-projects" });
@@ -884,6 +926,7 @@ const submitProposal = async (req, res) => {
     };
 
     await project.save();
+    await invalidateWorkerOngoingProjectsCache(workerId);
     res.status(200).json({ success: true, redirect: "/workerjobs" });
   } catch (error) {
     console.error("Error submitting proposal:", error);
@@ -1122,6 +1165,7 @@ const submitMilestone = async (req, res) => {
         existingMilestone.revisionNotes = undefined;
 
         await project.save();
+        await invalidateWorkerOngoingProjectsCache(workerId);
 
         return res.status(200).json({
           success: true,
@@ -1151,6 +1195,7 @@ const submitMilestone = async (req, res) => {
     // Add milestone to project
     project.milestones.push(newMilestone);
     await project.save();
+    await invalidateWorkerOngoingProjectsCache(workerId);
 
     res.status(200).json({
       success: true,

@@ -292,16 +292,19 @@ const routeGroups = [
 ];
 
 for (const group of routeGroups) {
-  test(`route smoke group: ${group.name}`, async () => {
-    const app = loadRouteApp(group);
+  for (const endpoint of group.endpoints) {
+    test(
+      `route smoke: ${group.name} ${endpoint.method} ${endpoint.path}`,
+      async () => {
+        const app = loadRouteApp(group);
+        const response = await runSmokeRequest(app, group.mountPath, endpoint);
 
-    for (const endpoint of group.endpoints) {
-      const response = await runSmokeRequest(app, group.mountPath, endpoint);
-      assert.equal(
-        response.status,
-        200,
-        `${group.name} ${endpoint.method} ${endpoint.path} expected 200, got ${response.status}`,
-      );
-    }
-  });
+        assert.equal(
+          response.status,
+          200,
+          `${group.name} ${endpoint.method} ${endpoint.path} expected 200, got ${response.status}`,
+        );
+      },
+    );
+  }
 }

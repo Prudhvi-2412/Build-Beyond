@@ -50,28 +50,63 @@ function renderAt(path) {
 }
 
 describe("App route smoke tests", () => {
-  it("renders login route", () => {
-    renderAt("/");
-    expect(screen.getByText("Login Page")).toBeInTheDocument();
-  });
+  const routeCases = [
+    ["/", "Login Page"],
+    ["/admin-login", "Admin Login Page"],
+    ["/platform-manager-login", "Platform Manager Login Page"],
+    ["/customerdashboard", "Customer Dashboard"],
+    ["/customerdashboard/", "Customer Dashboard"],
+    ["/customerdashboard/profile", "Customer Dashboard"],
+    ["/customerdashboard/projects", "Customer Dashboard"],
+    ["/customerdashboard/jobs", "Customer Dashboard"],
+    ["/customerdashboard/settings", "Customer Dashboard"],
+    ["/customerdashboard/ongoing", "Customer Dashboard"],
+    ["/customerdashboard/history", "Customer Dashboard"],
+    ["/companydashboard", "Company Dashboard"],
+    ["/companydashboard/", "Company Dashboard"],
+    ["/companydashboard/projects", "Company Dashboard"],
+    ["/companydashboard/revenue", "Company Dashboard"],
+    ["/companydashboard/hiring", "Company Dashboard"],
+    ["/companydashboard/bids", "Company Dashboard"],
+    ["/companydashboard/settings", "Company Dashboard"],
+    ["/companydashboard/employees", "Company Dashboard"],
+    ["/workerdashboard", "Worker Dashboard"],
+    ["/workerdashboard/", "Worker Dashboard"],
+    ["/workerdashboard/jobs", "Worker Dashboard"],
+    ["/workerdashboard/ongoing", "Worker Dashboard"],
+    ["/workerdashboard/settings", "Worker Dashboard"],
+    ["/workerdashboard/profile", "Worker Dashboard"],
+    ["/workerdashboard/my-company", "Worker Dashboard"],
+    ["/admin-view", "Admin Dashboard"],
+    ["/admin-view/", "Admin Dashboard"],
+    ["/admin-view/users", "Admin Dashboard"],
+    ["/admin-view/revenue", "Admin Dashboard"],
+    ["/admin-view/analytics", "Admin Dashboard"],
+    ["/admin-view/settings", "Admin Dashboard"],
+    ["/platform-manager", "Platform Manager Dashboard"],
+    ["/platform-manager/", "Platform Manager Dashboard"],
+    ["/platform-manager/dashboard", "Platform Manager Dashboard"],
+    ["/platform-manager/verification", "Platform Manager Dashboard"],
+    ["/platform-manager/payments", "Platform Manager Dashboard"],
+    ["/platform-manager/complaints", "Platform Manager Dashboard"],
+    ["/not-found", "Not Found Page"],
+    ["/unauthorized", "Unauthorized Page"],
+    ["/some-random-route", "Not Found Page"],
+    ["/random", "Not Found Page"],
+    ["/unknown/path", "Not Found Page"],
+    ["/admin", "Not Found Page"],
+    ["/customer", "Not Found Page"],
+    ["/company", "Not Found Page"],
+    ["/worker", "Not Found Page"],
+    ["/platform", "Not Found Page"],
+    ["/__invalid__", "Not Found Page"],
+    ["/....", "Not Found Page"],
+    ["/123", "Not Found Page"],
+    ["/abc/def/ghi", "Not Found Page"],
+  ];
 
-  it("renders admin login route", () => {
-    renderAt("/admin-login");
-    expect(screen.getByText("Admin Login Page")).toBeInTheDocument();
-  });
-
-  it("renders customer dashboard route", () => {
-    renderAt("/customerdashboard");
-    expect(screen.getByText("Customer Dashboard")).toBeInTheDocument();
-  });
-
-  it("renders admin dashboard route", () => {
-    renderAt("/admin-view");
-    expect(screen.getByText("Admin Dashboard")).toBeInTheDocument();
-  });
-
-  it("falls back to not found for unknown routes", () => {
-    renderAt("/some-random-route");
-    expect(screen.getByText("Not Found Page")).toBeInTheDocument();
+  it.each(routeCases)("renders expected page for route %s", (route, expected) => {
+    renderAt(route);
+    expect(screen.getByText(expected)).toBeInTheDocument();
   });
 });

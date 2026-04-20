@@ -93,6 +93,7 @@ const {
   buildCacheKey,
   getCacheJson,
   setCacheJson,
+  logRedisEndpointCache,
   getRedisCacheStats,
   resetRedisCacheStats,
 } = require("../utils/redisCache");
@@ -2766,6 +2767,7 @@ const getAdminRevenue = async (req, res) => {
 
 const getPlatformRevenueIntelligence = async (req, res) => {
   try {
+    const startedAt = process.hrtime.bigint();
     const {
       timeframe = "all",
       startDate,
@@ -2790,6 +2792,7 @@ const getPlatformRevenueIntelligence = async (req, res) => {
 
     const cachedPayload = await getCacheJson(cacheKey);
     if (cachedPayload) {
+      logRedisEndpointCache("hit", req.originalUrl, startedAt);
       return res.json(cachedPayload);
     }
 
@@ -3193,6 +3196,7 @@ const getPlatformRevenueIntelligence = async (req, res) => {
     };
 
     await setCacheJson(cacheKey, responsePayload, 180);
+    logRedisEndpointCache("miss", req.originalUrl, startedAt);
 
     res.json(responsePayload);
   } catch (error) {

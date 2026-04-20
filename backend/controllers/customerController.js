@@ -8,9 +8,44 @@ const {
   Company,
 } = require("../models/index");
 const { getTargetDate } = require("../utils/helpers");
+const {
+  buildCacheKey,
+  getCacheJson,
+  setCacheJson,
+  logRedisEndpointCache,
+  invalidateCacheByPrefix,
+} = require("../utils/redisCache");
 const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
 const { findOrCreateChatRoom } = require("./chatController");
+
+const CUSTOMER_ONGOING_CACHE_PREFIX = "customer:ongoing-projects:v1";
+const COMPANY_ONGOING_CACHE_PREFIX = "company:ongoing-projects:v1";
+
+const invalidateOngoingProjectCaches = async ({ customerId, companyId } = {}) => {
+  try {
+    const invalidations = [];
+    if (customerId) {
+      invalidations.push(
+        invalidateCacheByPrefix(
+          buildCacheKey(CUSTOMER_ONGOING_CACHE_PREFIX, { customerId }),
+        ),
+      );
+    }
+    if (companyId) {
+      invalidations.push(
+        invalidateCacheByPrefix(
+          buildCacheKey(COMPANY_ONGOING_CACHE_PREFIX, { companyId }),
+        ),
+      );
+    }
+    if (invalidations.length) {
+      await Promise.all(invalidations);
+    }
+  } catch (error) {
+    console.error("Failed to invalidate ongoing project caches:", error.message);
+  }
+};
 
 const getDashboard = (req, res) => {
   // routed file : customer/customer_dashboard
@@ -309,11 +344,21 @@ const getArchitectForm = (req, res) => {
 
 const getOngoingProjects = async (req, res) => {
   try {
+    const startedAt = process.hrtime.bigint();
     const customerId = req.user.user_id;
     if (!customerId)
       return res
         .status(401)
         .json({ error: "Unauthorized", redirect: "/login" });
+
+    const cacheKey = buildCacheKey(CUSTOMER_ONGOING_CACHE_PREFIX, {
+      customerId,
+    });
+    const cachedPayload = await getCacheJson(cacheKey);
+    if (cachedPayload) {
+      logRedisEndpointCache("hit", req.originalUrl, startedAt);
+      return res.status(200).json(cachedPayload);
+    }
 
     const projects = await ConstructionProjectSchema.find({
       customerId,
@@ -380,8 +425,12 @@ const getOngoingProjects = async (req, res) => {
       };
     });
 
+    const responsePayload = { projects: enhancedProjects, metrics };
+    await setCacheJson(cacheKey, responsePayload, 90);
+    logRedisEndpointCache("miss", req.originalUrl, startedAt);
+
     // routed file : customer/ongoing_projects
-    res.status(200).json({ projects: enhancedProjects, metrics });
+    res.status(200).json(responsePayload);
   } catch (error) {
     console.error("Error fetching projects:", error);
     res.status(500).json({ error: "Server error" });
@@ -689,6 +738,10 @@ const acceptCompanyBid = async (req, res, next) => {
 
     await UpdateOngoingProjectsSchema(bid, companyBid);
     await bid.save();
+    await invalidateOngoingProjectCaches({
+      customerId,
+      companyId: companyBid.companyId,
+    });
 
     res.status(200).json({ success: true, redirect: "/ongoing_projects" });
   } catch (error) {
@@ -766,6 +819,10 @@ const acceptCompanyProposal = async (req, res) => {
     });
 
     await project.save();
+    await invalidateOngoingProjectCaches({
+      customerId,
+      companyId: project.companyId,
+    });
     res.status(200).json({ success: true, redirect: "/ongoing_projects" });
   } catch (error) {
     console.error("Error accepting company proposal:", error);
@@ -913,6 +970,10 @@ const acceptConstructionProposal = async (req, res) => {
     project.proposalAcceptedAt = new Date();
 
     await project.save();
+    await invalidateOngoingProjectCaches({
+      customerId,
+      companyId: project.companyId,
+    });
     res
       .status(200)
       .json({ success: true, message: "Proposal accepted successfully" });

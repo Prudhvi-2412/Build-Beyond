@@ -11,6 +11,7 @@ const {
   buildCacheKey,
   getCacheJson,
   setCacheJson,
+  logRedisEndpointCache,
 } = require("../utils/redisCache");
 
 const ADMIN_ANALYTICS_CACHE_PREFIX = "admin:analytics:v1";
@@ -179,6 +180,7 @@ const sumCommission = (doc) =>
 
 const getAdminAnalytics = async (req, res) => {
   try {
+    const startedAt = process.hrtime.bigint();
     const timeFilter = (req.query.timeFilter || "month").toLowerCase();
     const validFilter = ["week", "month", "quarter", "year", "all"].includes(
       timeFilter,
@@ -192,6 +194,7 @@ const getAdminAnalytics = async (req, res) => {
 
     const cachedPayload = await getCacheJson(cacheKey);
     if (cachedPayload) {
+      logRedisEndpointCache("hit", req.originalUrl, startedAt);
       return res.status(200).json(cachedPayload);
     }
 
@@ -779,6 +782,7 @@ const getAdminAnalytics = async (req, res) => {
     };
 
     await setCacheJson(cacheKey, responsePayload, 120);
+    logRedisEndpointCache("miss", req.originalUrl, startedAt);
 
     res.status(200).json(responsePayload);
   } catch (error) {
