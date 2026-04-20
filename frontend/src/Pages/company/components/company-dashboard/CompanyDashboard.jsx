@@ -7,6 +7,7 @@ import BidsList from "./components/BidsList";
 import ProjectsList from "./components/ProjectsList";
 import TimelineProjects from "./components/TimelineProjects";
 import BidReviewModal from "./components/BidReviewModal";
+import API_BASE from "../../../../api/backendBase";
 
 const CompanyDashboard = () => {
   const [data, setData] = useState({
@@ -26,7 +27,7 @@ const CompanyDashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch("/api/companydashboard", {
+        const res = await fetch(`${API_BASE}/api/companydashboard`, {
           credentials: "include",
         });
         if (!res.ok) throw new Error("Failed to load dashboard");
@@ -123,7 +124,7 @@ const CompanyDashboard = () => {
     }
 
     try {
-      const res = await fetch("/api/submit-bid", {
+      const res = await fetch(`${API_BASE}/api/submit-bid`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -150,7 +151,7 @@ const CompanyDashboard = () => {
   const updateProjectStatus = async (bidId, status) => {
     const apiRoute = `/api/projects/${bidId}/${status}`;
     try {
-      const res = await fetch(apiRoute, {
+      const res = await fetch(`${API_BASE}${apiRoute}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

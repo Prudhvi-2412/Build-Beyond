@@ -4,6 +4,7 @@ import StatsCards from "./components/StatsCards";
 import ProjectsTable from "./components/ProjectsTable";
 import SidebarStats from "./components/SidebarStats";
 import ProjectDetailsModal from "./components/ProjectDetailsModal";
+import API_BASE from "../../../../api/backendBase";
 
 const CompanyRevenue = () => {
   const [projects, setProjects] = useState([]);
@@ -23,7 +24,7 @@ const CompanyRevenue = () => {
         setLoading(true);
       }
       setError(null);
-      const res = await fetch("/api/companyrevenue", {
+      const res = await fetch(`${API_BASE}/api/companyrevenue`, {
         credentials: "include",
         cache: "no-store",
         signal: controller.signal,

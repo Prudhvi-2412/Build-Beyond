@@ -5,8 +5,7 @@ import WorkerRequestCard from "./components/WorkerRequestCard";
 import RequestedWorkersTable from "./components/RequestedWorkersTable";
 import ProfileModal from "./components/ProfileModal";
 import HireModal from "./components/HireModal";
-
-const BACKEND_BASE = "";
+import API_BASE from "../../../../api/backendBase";
 
 function useDebounced(fn, wait = 300) {
   const timeoutRef = React.useRef(null);
@@ -39,7 +38,7 @@ const CompanyHiring = () => {
     let mounted = true;
     setLoading(true);
     setError(null);
-    fetch(`${BACKEND_BASE}/api/companyhiring`, {
+    fetch(`${API_BASE}/api/companyhiring`, {
       method: "GET",
       credentials: "include"
     })
@@ -128,7 +127,7 @@ const CompanyHiring = () => {
     if (!hireForm.salary || isNaN(salaryVal) || salaryVal <= 0) { alert("Please enter a valid salary greater than 0." ); return; }
     if (!hireForm.workerId) { alert("Missing worker ID."); return; }
     try {
-      const res = await fetch(`${BACKEND_BASE}/companytoworker`, {
+      const res = await fetch(`${API_BASE}/companytoworker`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -150,7 +149,7 @@ const CompanyHiring = () => {
     if (!["accepted", "rejected"].includes(status)) return;
     if (!window.confirm(`Are you sure you want to ${status} this request?`)) return;
     try {
-      const res = await fetch(`${BACKEND_BASE}/worker-request/${requestId}`, {
+      const res = await fetch(`${API_BASE}/worker-request/${requestId}`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

@@ -5,8 +5,7 @@ import AboutSection from "./components/AboutSection";
 import Specializations from "./components/Specializations";
 import TeamMembers from "./components/TeamMembers";
 import CompletedProjects from "./components/CompletedProjects";
-
-const _API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+import API_BASE from "../../../../api/backendBase";
 
 
 const CompanyPublicProfile = () => {
@@ -22,7 +21,7 @@ const CompanyPublicProfile = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${_API_BASE}/api/companysettings`, {
+      const response = await fetch(`${API_BASE}/api/companysettings`, {
         credentials: "include"
       });
 

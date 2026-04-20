@@ -3,12 +3,12 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useDispatch } from 'react-redux';
 import { fetchCustomerProfile } from '../../store/slices/customerProfileSlice';
+import API_BASE from "../../api/backendBase";
 import "./LoginSignUp.css";
 
 const OTP_LENGTH = 6;
 const GOOGLE_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 
 const LoginSignUp = () => {

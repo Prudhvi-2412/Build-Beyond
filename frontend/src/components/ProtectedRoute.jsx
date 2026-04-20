@@ -1,9 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-// Use VITE_API_BASE_URL in production so requests go directly to Render
-// (not via Vercel proxy which drops auth cookies)
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+import API_BASE from "../api/backendBase";
 
 const ProtectedRoute = ({ role, children }) => {
   const navigate = useNavigate();

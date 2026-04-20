@@ -8,6 +8,7 @@ import ProjectUpdates from "./components/ProjectUpdates";
 import FilterSidebar from "./components/FilterSidebar";
 import ComplaintModal from "./components/ComplaintModal";
 import { useGlobalChat } from "../../../../context/GlobalChatContext";
+import API_BASE from "../../../../api/backendBase";
 import "./CompanyOngoing.css";
 
 const CompanyOngoing = () => {
@@ -51,12 +52,9 @@ const CompanyOngoing = () => {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(
-        "/api/companyongoing_projects",
-        {
-          credentials: "include",
-        },
-      );
+      const res = await fetch(`${API_BASE}/api/companyongoing_projects`, {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Failed to fetch ongoing projects");
       const data = await res.json();
       setProjects(data.projects || []);
@@ -65,7 +63,7 @@ const CompanyOngoing = () => {
       // Fetch unviewed complaints count (from customers)
       try {
         const complaintsRes = await fetch(
-          "/api/company/unviewed-customer-messages",
+          `${API_BASE}/api/company/unviewed-customer-messages`,
           {
             credentials: "include",
           },
@@ -161,7 +159,7 @@ const CompanyOngoing = () => {
 
       try {
         await fetch(
-          `/api/company/mark-messages-viewed/${id}`,
+          `${API_BASE}/api/company/mark-messages-viewed/${id}`,
           {
             method: "POST",
             credentials: "include",
@@ -194,7 +192,7 @@ const CompanyOngoing = () => {
   const fetchComplaintHistory = async (projectId, milestone) => {
     setComplaintHistoryLoading(true);
     try {
-      const response = await fetch(`/api/complaints/${projectId}`, {
+      const response = await fetch(`${API_BASE}/api/complaints/${projectId}`, {
         credentials: "include",
       });
       const data = await response.json();
@@ -237,7 +235,7 @@ const CompanyOngoing = () => {
     setComplaintLoading(true);
     setComplaintError(null);
     try {
-      await fetch("/api/complaints", {
+      await fetch(`${API_BASE}/api/complaints`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

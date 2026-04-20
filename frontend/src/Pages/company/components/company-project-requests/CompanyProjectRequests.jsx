@@ -2,10 +2,8 @@ import React, { useEffect, useState } from "react";
 import ProjectCard from "./components/ProjectCard";
 import DetailsModal from "./components/DetailsModal";
 import ProposalModal from "./components/ProposalModal";
+import API_BASE from "../../../../api/backendBase";
 import "./CompanyProjectRequests.css";
-
-const _API_BASE = import.meta.env.VITE_API_BASE_URL || '';
-
 
 const CompanyProjectRequests = () => {
   const [projects, setProjects] = useState([]);
@@ -29,7 +27,7 @@ const CompanyProjectRequests = () => {
   const fetchProjects = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${_API_BASE}/api/project_requests`, {
+      const res = await fetch(`${API_BASE}/api/project_requests`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch project requests");
@@ -145,7 +143,7 @@ const CompanyProjectRequests = () => {
       };
 
       const res = await fetch(
-        "/api/company/submit-proposal",
+        `${API_BASE}/api/company/submit-proposal`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -175,7 +173,7 @@ const CompanyProjectRequests = () => {
 
     try {
       const res = await fetch(
-        `/api/projects/${projectId}/rejected`,
+        `${API_BASE}/api/projects/${projectId}/rejected`,
         {
           method: "PATCH",
           credentials: "include",

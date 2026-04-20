@@ -1,6 +1,7 @@
 // src/components/company-navbar/CompanyNavbar.jsx
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
+import API_BASE from "../../../../api/backendBase";
 import "./CompanyNavbar.css";
 
 const CompanyNavbar = () => {
@@ -12,7 +13,7 @@ const CompanyNavbar = () => {
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
-        const res = await fetch("/api/company/notifications", {
+        const res = await fetch(`${API_BASE}/api/company/notifications`, {
           credentials: "include",
         });
         if (!res.ok) return;
@@ -66,7 +67,7 @@ const CompanyNavbar = () => {
     if (!notification?.projectId) return;
 
     try {
-      await fetch(`/api/company/mark-messages-viewed/${notification.projectId}`, {
+      await fetch(`${API_BASE}/api/company/mark-messages-viewed/${notification.projectId}`, {
         method: "POST",
         credentials: "include",
       });

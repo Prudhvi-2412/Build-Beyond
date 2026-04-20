@@ -1,7 +1,6 @@
 import React, { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-
-const _API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+import API_BASE from "../api/backendBase";
 
 
 const buttonStyle = {
@@ -22,7 +21,7 @@ const Unauthorized = () => {
 
   useEffect(() => {
     // Log unauthorized access to backend
-    fetch(`${_API_BASE}/api/log-client-error`, {
+    fetch(`${API_BASE}/api/log-client-error`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

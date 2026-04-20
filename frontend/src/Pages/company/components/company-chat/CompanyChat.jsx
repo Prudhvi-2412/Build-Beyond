@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
+import API_BASE from "../../../../api/backendBase";
 import './CompanyChat.css';
 
 const CompanyChat = () => {
@@ -24,7 +25,7 @@ const CompanyChat = () => {
   useEffect(() => {
     const fetchChatData = async () => {
       try {
-        const response = await fetch(`/api/chat/${roomId}`, {
+        const response = await fetch(`${API_BASE}/api/chat/${roomId}`, {
           credentials: 'include',
         });
         if (!response.ok) throw new Error('Failed to load chat');

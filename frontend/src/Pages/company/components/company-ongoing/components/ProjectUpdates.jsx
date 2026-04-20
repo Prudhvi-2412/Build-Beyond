@@ -1,6 +1,7 @@
 // src/pages/company/components/company-ongoing/components/ProjectUpdates.jsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import API_BASE from "../../../../../api/backendBase";
 
 const ENABLE_TEST_SKIP = import.meta.env.DEV || import.meta.env.VITE_ENABLE_TEST_PAYMENT_SKIP === 'true';
 
@@ -49,7 +50,7 @@ const ProjectUpdates = ({ project, expandedUpdates, onRefresh }) => {
     try {
       setUploadingKey(key);
       setUploadError('');
-      const response = await fetch('/api/company/platform-fee-invoice', {
+      const response = await fetch(`${API_BASE}/api/company/platform-fee-invoice`, {
         method: 'POST',
         credentials: 'include',
         body: formData,
@@ -80,7 +81,7 @@ const ProjectUpdates = ({ project, expandedUpdates, onRefresh }) => {
       setPayingFeeKey(key);
       setUploadError('');
 
-      const orderResponse = await fetch('/api/payment/company/platform-fee/create-order', {
+      const orderResponse = await fetch(`${API_BASE}/api/payment/company/platform-fee/create-order`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -107,7 +108,7 @@ const ProjectUpdates = ({ project, expandedUpdates, onRefresh }) => {
         description: `Platform fee (${phaseName || `${milestonePercentage}% phase`})`,
         handler: async (response) => {
           try {
-            const verifyResponse = await fetch('/api/payment/company/platform-fee/verify-payment', {
+            const verifyResponse = await fetch(`${API_BASE}/api/payment/company/platform-fee/verify-payment`, {
               method: 'POST',
               credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
@@ -155,7 +156,7 @@ const ProjectUpdates = ({ project, expandedUpdates, onRefresh }) => {
       setTestPayingFeeKey(key);
       setUploadError('');
 
-      const response = await fetch('/api/payment/company/platform-fee/test-mark-paid', {
+      const response = await fetch(`${API_BASE}/api/payment/company/platform-fee/test-mark-paid`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

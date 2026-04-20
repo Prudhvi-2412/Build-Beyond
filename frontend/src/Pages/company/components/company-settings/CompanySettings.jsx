@@ -5,12 +5,11 @@ import SettingsSidebar from "./components/SettingsSidebar";
 import ProfileSection from "./components/ProfileSection";
 import SecuritySection from "./components/SecuritySection";
 import HelpSection from "./components/HelpSection";
+import API_BASE from "../../../../api/backendBase";
 
-const _API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
-
-const API_GET = "/api/companysettings";
-const API_POST_UPDATE = "/api/update-company-profile";
+const API_GET = `${API_BASE}/api/companysettings`;
+const API_POST_UPDATE = `${API_BASE}/api/update-company-profile`;
 
 export default function CompanySettings() {
   const [loading, setLoading] = useState(true);

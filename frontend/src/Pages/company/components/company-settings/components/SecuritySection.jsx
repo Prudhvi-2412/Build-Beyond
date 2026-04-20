@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import API_BASE from "../../../../../api/backendBase";
 
 export default function SecuritySection() {
   const [securityForm, setSecurityForm] = useState({
@@ -12,7 +13,7 @@ export default function SecuritySection() {
   useEffect(() => {
     const fetchTwoFactorStatus = async () => {
       try {
-        const res = await fetch("/api/2fa/status", {
+        const res = await fetch(`${API_BASE}/api/2fa/status`, {
           method: "GET",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -57,7 +58,7 @@ export default function SecuritySection() {
     }
 
     try {
-      const res = await fetch("/api/company/password/update", {
+      const res = await fetch(`${API_BASE}/api/company/password/update`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -83,7 +84,7 @@ export default function SecuritySection() {
   const toggleTwoFactor = async () => {
     try {
       const nextValue = !twoFactorEnabled;
-      const res = await fetch("/api/2fa/status", {
+      const res = await fetch(`${API_BASE}/api/2fa/status`, {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
